@@ -1,0 +1,1106 @@
+openapi: 3.1.0
+info:
+  title: Api
+  version: 0.1.0
+  description: Semenq API specification - AI-powered medicine accessibility platform
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+  - name: medicines
+    description: Medicine catalog operations
+  - name: pharmacies
+    description: Pharmacy management operations
+  - name: prescriptions
+    description: Prescription upload and parsing operations
+  - name: reservations
+    description: Medicine reservation operations
+  - name: orders
+    description: Order and courier operations
+  - name: users
+    description: User profile operations
+  - name: analytics
+    description: Dashboard analytics and demand forecasting
+  - name: search
+    description: Intelligent medicine search operations
+  - name: notifications
+    description: Notification management
+
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      description: Returns server health status
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+
+  /medicines:
+    get:
+      operationId: listMedicines
+      tags: [medicines]
+      summary: List medicines
+      parameters:
+        - name: query
+          in: query
+          schema: { type: string }
+        - name: category
+          in: query
+          schema: { type: string }
+        - name: page
+          in: query
+          schema: { type: integer, default: 1 }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 20 }
+      responses:
+        "200":
+          description: List of medicines
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MedicineList"
+
+  /medicines/{id}:
+    get:
+      operationId: getMedicine
+      tags: [medicines]
+      summary: Get medicine details
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Medicine details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Medicine"
+        "404":
+          description: Not found
+
+  /medicines/{id}/availability:
+    get:
+      operationId: getMedicineAvailability
+      tags: [medicines]
+      summary: Get medicine availability across locations
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Availability by zone
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MedicineAvailability"
+
+  /pharmacies:
+    get:
+      operationId: listPharmacies
+      tags: [pharmacies]
+      summary: List pharmacies
+      parameters:
+        - name: city
+          in: query
+          schema: { type: string }
+        - name: state
+          in: query
+          schema: { type: string }
+        - name: lat
+          in: query
+          schema: { type: number }
+        - name: lng
+          in: query
+          schema: { type: number }
+        - name: radius
+          in: query
+          schema: { type: number }
+      responses:
+        "200":
+          description: List of pharmacies
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Pharmacy"
+
+  /pharmacies/{id}:
+    get:
+      operationId: getPharmacy
+      tags: [pharmacies]
+      summary: Get pharmacy details
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Pharmacy details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Pharmacy"
+
+  /pharmacies/{id}/inventory:
+    get:
+      operationId: getPharmacyInventory
+      tags: [pharmacies]
+      summary: Get pharmacy inventory
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Inventory list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/InventoryItem"
+
+  /pharmacies/{id}/inventory/{itemId}:
+    patch:
+      operationId: updateInventoryItem
+      tags: [pharmacies]
+      summary: Update inventory item
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+        - name: itemId
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InventoryUpdate"
+      responses:
+        "200":
+          description: Updated inventory item
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryItem"
+
+  /prescriptions:
+    get:
+      operationId: listPrescriptions
+      tags: [prescriptions]
+      summary: List user prescriptions
+      responses:
+        "200":
+          description: List of prescriptions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Prescription"
+
+    post:
+      operationId: uploadPrescription
+      tags: [prescriptions]
+      summary: Upload and parse prescription
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PrescriptionInput"
+      responses:
+        "201":
+          description: Uploaded prescription with parsed medicines
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Prescription"
+
+  /prescriptions/{id}:
+    get:
+      operationId: getPrescription
+      tags: [prescriptions]
+      summary: Get prescription details
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Prescription details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Prescription"
+
+  /reservations:
+    get:
+      operationId: listReservations
+      tags: [reservations]
+      summary: List reservations
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, confirmed, ready, cancelled, expired]
+        - name: pharmacyId
+          in: query
+          schema: { type: integer }
+      responses:
+        "200":
+          description: List of reservations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Reservation"
+
+    post:
+      operationId: createReservation
+      tags: [reservations]
+      summary: Create a reservation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReservationInput"
+      responses:
+        "201":
+          description: Created reservation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Reservation"
+
+  /reservations/{id}:
+    get:
+      operationId: getReservation
+      tags: [reservations]
+      summary: Get reservation details
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Reservation details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Reservation"
+
+    patch:
+      operationId: updateReservation
+      tags: [reservations]
+      summary: Update reservation status
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReservationUpdate"
+      responses:
+        "200":
+          description: Updated reservation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Reservation"
+
+  /orders:
+    get:
+      operationId: listOrders
+      tags: [orders]
+      summary: List orders
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [placed, processing, packed, shipped, delivered, cancelled]
+      responses:
+        "200":
+          description: List of orders
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Order"
+
+    post:
+      operationId: createOrder
+      tags: [orders]
+      summary: Create an order (from reservation)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OrderInput"
+      responses:
+        "201":
+          description: Created order
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+
+  /orders/{id}:
+    get:
+      operationId: getOrder
+      tags: [orders]
+      summary: Get order details
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Order details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+
+  /orders/{id}/tracking:
+    get:
+      operationId: getOrderTracking
+      tags: [orders]
+      summary: Get real-time order tracking
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Tracking details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrderTracking"
+
+  /users/me:
+    get:
+      operationId: getMyProfile
+      tags: [users]
+      summary: Get current user profile
+      responses:
+        "200":
+          description: User profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserProfile"
+
+    patch:
+      operationId: updateMyProfile
+      tags: [users]
+      summary: Update current user profile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserProfileUpdate"
+      responses:
+        "200":
+          description: Updated profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserProfile"
+
+  /users/me/dashboard:
+    get:
+      operationId: getPatientDashboard
+      tags: [users]
+      summary: Get patient dashboard summary
+      responses:
+        "200":
+          description: Patient dashboard data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PatientDashboard"
+
+  /search/medicines:
+    get:
+      operationId: searchMedicines
+      tags: [search]
+      summary: Intelligent medicine search with location-aware expansion
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema: { type: string }
+        - name: lat
+          in: query
+          schema: { type: number }
+        - name: lng
+          in: query
+          schema: { type: number }
+        - name: radius
+          in: query
+          schema: { type: number, default: 5 }
+        - name: sortBy
+          in: query
+          schema:
+            type: string
+            enum: [nearest, fastest, cheapest, bestMatch]
+            default: bestMatch
+      responses:
+        "200":
+          description: Search results with availability
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MedicineSearchResult"
+
+  /search/suggestions:
+    get:
+      operationId: getSearchSuggestions
+      tags: [search]
+      summary: Get search autocomplete suggestions
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Search suggestions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SearchSuggestion"
+
+  /analytics/pharmacy-dashboard:
+    get:
+      operationId: getPharmacyDashboard
+      tags: [analytics]
+      summary: Get pharmacy dashboard analytics
+      responses:
+        "200":
+          description: Pharmacy dashboard data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PharmacyDashboard"
+
+  /analytics/demand-forecast:
+    get:
+      operationId: getDemandForecast
+      tags: [analytics]
+      summary: Get AI-powered demand forecast for pharmacy
+      parameters:
+        - name: days
+          in: query
+          schema: { type: integer, default: 30 }
+      responses:
+        "200":
+          description: Demand forecast data
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DemandForecastItem"
+
+  /analytics/admin-dashboard:
+    get:
+      operationId: getAdminDashboard
+      tags: [analytics]
+      summary: Get admin dashboard overview
+      responses:
+        "200":
+          description: Admin dashboard data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminDashboard"
+
+  /analytics/top-medicines:
+    get:
+      operationId: getTopMedicines
+      tags: [analytics]
+      summary: Get top searched/reserved medicines
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, default: 10 }
+      responses:
+        "200":
+          description: Top medicines
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TopMedicine"
+
+  /notifications:
+    get:
+      operationId: listNotifications
+      tags: [notifications]
+      summary: List user notifications
+      parameters:
+        - name: unreadOnly
+          in: query
+          schema: { type: boolean }
+      responses:
+        "200":
+          description: List of notifications
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Notification"
+
+  /notifications/{id}/read:
+    patch:
+      operationId: markNotificationRead
+      tags: [notifications]
+      summary: Mark notification as read
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Notification marked as read
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Notification"
+
+components:
+  schemas:
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+      required:
+        - status
+
+    Medicine:
+      type: object
+      required: [id, name, genericName, category, manufacturer, price, imageUrl]
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        genericName: { type: string }
+        category: { type: string }
+        manufacturer: { type: string }
+        composition: { type: string }
+        dosage: { type: string }
+        price: { type: number }
+        mrp: { type: number }
+        imageUrl: { type: string }
+        requiresPrescription: { type: boolean }
+        description: { type: ["string", "null"] }
+        sideEffects: { type: ["string", "null"] }
+        storageConditions: { type: ["string", "null"] }
+
+    MedicineList:
+      type: object
+      required: [items, total, page, limit]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Medicine"
+        total: { type: integer }
+        page: { type: integer }
+        limit: { type: integer }
+
+    MedicineAvailability:
+      type: object
+      required: [medicineId, zones]
+      properties:
+        medicineId: { type: integer }
+        zones:
+          type: array
+          items:
+            $ref: "#/components/schemas/AvailabilityZone"
+
+    AvailabilityZone:
+      type: object
+      required: [level, label, pharmacyCount, minPrice, estimatedDelivery]
+      properties:
+        level: { type: string, enum: [nearby, city, district, state, national] }
+        label: { type: string }
+        pharmacyCount: { type: integer }
+        minPrice: { type: number }
+        estimatedDelivery: { type: string }
+        pharmacies:
+          type: array
+          items:
+            $ref: "#/components/schemas/PharmacyStock"
+
+    PharmacyStock:
+      type: object
+      required: [pharmacyId, pharmacyName, quantity, price, distance]
+      properties:
+        pharmacyId: { type: integer }
+        pharmacyName: { type: string }
+        quantity: { type: integer }
+        price: { type: number }
+        distance: { type: number }
+        distanceUnit: { type: string }
+        estimatedDelivery: { type: string }
+        deliveryType: { type: string, enum: [pickup, courier] }
+        lat: { type: number }
+        lng: { type: number }
+        stockStatus: { type: string, enum: [available, limited, outOfStock] }
+
+    Pharmacy:
+      type: object
+      required: [id, name, city, state, address, phone, isVerified, rating]
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        ownerName: { type: string }
+        address: { type: string }
+        city: { type: string }
+        state: { type: string }
+        pincode: { type: string }
+        phone: { type: string }
+        email: { type: ["string", "null"] }
+        lat: { type: number }
+        lng: { type: number }
+        isVerified: { type: boolean }
+        rating: { type: number }
+        reviewCount: { type: integer }
+        openTime: { type: string }
+        closeTime: { type: string }
+        offersCourier: { type: boolean }
+        licenseNumber: { type: string }
+        totalInventory: { type: integer }
+
+    InventoryItem:
+      type: object
+      required: [id, medicineId, medicineName, quantity, price, expiryDate, stockStatus]
+      properties:
+        id: { type: integer }
+        medicineId: { type: integer }
+        medicineName: { type: string }
+        genericName: { type: string }
+        quantity: { type: integer }
+        price: { type: number }
+        mrp: { type: number }
+        expiryDate: { type: string }
+        batchNumber: { type: string }
+        stockStatus: { type: string, enum: [inStock, lowStock, outOfStock] }
+        reorderLevel: { type: integer }
+        lastRestocked: { type: string }
+
+    InventoryUpdate:
+      type: object
+      properties:
+        quantity: { type: integer }
+        price: { type: number }
+        expiryDate: { type: string }
+        reorderLevel: { type: integer }
+
+    Prescription:
+      type: object
+      required: [id, status, uploadedAt, medicines]
+      properties:
+        id: { type: integer }
+        doctorName: { type: ["string", "null"] }
+        patientName: { type: ["string", "null"] }
+        hospitalName: { type: ["string", "null"] }
+        uploadedAt: { type: string }
+        status: { type: string, enum: [processing, parsed, failed] }
+        imageUrl: { type: ["string", "null"] }
+        overallConfidence: { type: number }
+        medicines:
+          type: array
+          items:
+            $ref: "#/components/schemas/ParsedMedicine"
+        notes: { type: ["string", "null"] }
+
+    ParsedMedicine:
+      type: object
+      required: [id, name, confidence]
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        dosage: { type: ["string", "null"] }
+        frequency: { type: ["string", "null"] }
+        duration: { type: ["string", "null"] }
+        confidence: { type: number }
+        matchedMedicineId: { type: ["integer", "null"] }
+        status: { type: string, enum: [confirmed, lowConfidence, unmatched] }
+
+    PrescriptionInput:
+      type: object
+      required: [imageBase64]
+      properties:
+        imageBase64: { type: string }
+        mimeType: { type: string }
+
+    Reservation:
+      type: object
+      required: [id, medicineId, medicineName, pharmacyId, pharmacyName, quantity, status, expiresAt, createdAt]
+      properties:
+        id: { type: integer }
+        medicineId: { type: integer }
+        medicineName: { type: string }
+        pharmacyId: { type: integer }
+        pharmacyName: { type: string }
+        quantity: { type: integer }
+        price: { type: number }
+        totalAmount: { type: number }
+        status: { type: string, enum: [pending, confirmed, ready, cancelled, expired] }
+        deliveryType: { type: string, enum: [pickup, courier] }
+        expiresAt: { type: string }
+        createdAt: { type: string }
+        prescriptionId: { type: ["integer", "null"] }
+        qrCode: { type: ["string", "null"] }
+        notes: { type: ["string", "null"] }
+
+    ReservationInput:
+      type: object
+      required: [medicineId, pharmacyId, quantity, deliveryType]
+      properties:
+        medicineId: { type: integer }
+        pharmacyId: { type: integer }
+        quantity: { type: integer }
+        deliveryType: { type: string, enum: [pickup, courier] }
+        prescriptionId: { type: ["integer", "null"] }
+        notes: { type: ["string", "null"] }
+
+    ReservationUpdate:
+      type: object
+      properties:
+        status: { type: string, enum: [confirmed, ready, cancelled] }
+        notes: { type: string }
+
+    Order:
+      type: object
+      required: [id, reservationId, status, totalAmount, createdAt]
+      properties:
+        id: { type: integer }
+        reservationId: { type: integer }
+        medicineName: { type: string }
+        pharmacyName: { type: string }
+        status: { type: string, enum: [placed, processing, packed, shipped, delivered, cancelled] }
+        deliveryType: { type: string, enum: [pickup, courier] }
+        totalAmount: { type: number }
+        paymentMethod: { type: string }
+        paymentStatus: { type: string, enum: [pending, paid, failed, refunded] }
+        deliveryAddress: { type: ["string", "null"] }
+        trackingId: { type: ["string", "null"] }
+        estimatedDelivery: { type: ["string", "null"] }
+        createdAt: { type: string }
+        updatedAt: { type: string }
+
+    OrderInput:
+      type: object
+      required: [reservationId, paymentMethod]
+      properties:
+        reservationId: { type: integer }
+        paymentMethod: { type: string, enum: [upi, card, netBanking, wallet] }
+        deliveryAddress: { type: ["string", "null"] }
+
+    OrderTracking:
+      type: object
+      required: [orderId, currentStatus, timeline]
+      properties:
+        orderId: { type: integer }
+        currentStatus: { type: string }
+        currentLat: { type: ["number", "null"] }
+        currentLng: { type: ["number", "null"] }
+        estimatedDelivery: { type: string }
+        timeline:
+          type: array
+          items:
+            $ref: "#/components/schemas/TrackingEvent"
+
+    TrackingEvent:
+      type: object
+      required: [stage, label, timestamp, completed]
+      properties:
+        stage: { type: string }
+        label: { type: string }
+        description: { type: string }
+        timestamp: { type: ["string", "null"] }
+        completed: { type: boolean }
+
+    UserProfile:
+      type: object
+      required: [id, name, email, role, phone]
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        email: { type: string }
+        phone: { type: string }
+        role: { type: string, enum: [patient, pharmacy, admin] }
+        city: { type: string }
+        state: { type: string }
+        pincode: { type: string }
+        address: { type: string }
+        avatarUrl: { type: ["string", "null"] }
+        isVerified: { type: boolean }
+        createdAt: { type: string }
+
+    UserProfileUpdate:
+      type: object
+      properties:
+        name: { type: string }
+        phone: { type: string }
+        city: { type: string }
+        state: { type: string }
+        pincode: { type: string }
+        address: { type: string }
+
+    PatientDashboard:
+      type: object
+      required: [pendingReservations, activeOrders, totalOrders, recentPrescriptions, upcomingReservations, aiRecommendations]
+      properties:
+        pendingReservations: { type: integer }
+        activeOrders: { type: integer }
+        totalOrders: { type: integer }
+        recentPrescriptions:
+          type: array
+          items:
+            $ref: "#/components/schemas/Prescription"
+        upcomingReservations:
+          type: array
+          items:
+            $ref: "#/components/schemas/Reservation"
+        recentOrders:
+          type: array
+          items:
+            $ref: "#/components/schemas/Order"
+        aiRecommendations:
+          type: array
+          items:
+            $ref: "#/components/schemas/AiRecommendation"
+
+    AiRecommendation:
+      type: object
+      required: [id, type, title, description]
+      properties:
+        id: { type: integer }
+        type: { type: string, enum: [refill, alternative, saving, alert] }
+        title: { type: string }
+        description: { type: string }
+        medicineId: { type: ["integer", "null"] }
+        medicineName: { type: ["string", "null"] }
+        actionLabel: { type: ["string", "null"] }
+
+    PharmacyDashboard:
+      type: object
+      required: [totalInventory, lowStockCount, todayReservations, pendingReservations, todayRevenue, monthlyRevenue, courierRequests]
+      properties:
+        totalInventory: { type: integer }
+        lowStockCount: { type: integer }
+        outOfStockCount: { type: integer }
+        todayReservations: { type: integer }
+        pendingReservations: { type: integer }
+        confirmedReservations: { type: integer }
+        todayRevenue: { type: number }
+        monthlyRevenue: { type: number }
+        courierRequests: { type: integer }
+        recentReservations:
+          type: array
+          items:
+            $ref: "#/components/schemas/Reservation"
+        topSellingMedicines:
+          type: array
+          items:
+            $ref: "#/components/schemas/TopMedicine"
+        revenueByDay:
+          type: array
+          items:
+            $ref: "#/components/schemas/RevenueDataPoint"
+
+    RevenueDataPoint:
+      type: object
+      required: [date, revenue, orders]
+      properties:
+        date: { type: string }
+        revenue: { type: number }
+        orders: { type: integer }
+
+    AdminDashboard:
+      type: object
+      required: [totalUsers, totalPharmacies, totalMedicines, totalOrders, monthlyRevenue, platformHealth]
+      properties:
+        totalUsers: { type: integer }
+        totalPharmacies: { type: integer }
+        totalMedicines: { type: integer }
+        totalOrders: { type: integer }
+        monthlyRevenue: { type: number }
+        activeReservations: { type: integer }
+        pendingVerifications: { type: integer }
+        platformHealth:
+          $ref: "#/components/schemas/PlatformHealth"
+        recentActivity:
+          type: array
+          items:
+            $ref: "#/components/schemas/ActivityEvent"
+        userGrowth:
+          type: array
+          items:
+            $ref: "#/components/schemas/RevenueDataPoint"
+
+    PlatformHealth:
+      type: object
+      required: [serverStatus, dbStatus, apiStatus, apiResponseTime, uptime]
+      properties:
+        serverStatus: { type: string, enum: [healthy, degraded, down] }
+        dbStatus: { type: string, enum: [healthy, degraded, down] }
+        apiStatus: { type: string, enum: [healthy, degraded, down] }
+        apiResponseTime: { type: number }
+        uptime: { type: number }
+        errorRate: { type: number }
+
+    ActivityEvent:
+      type: object
+      required: [id, type, description, timestamp]
+      properties:
+        id: { type: integer }
+        type: { type: string, enum: [userRegistered, pharmacyVerified, orderPlaced, paymentReceived, alert] }
+        description: { type: string }
+        timestamp: { type: string }
+        metadata: { type: string }
+
+    DemandForecastItem:
+      type: object
+      required: [medicineId, medicineName, currentStock, predictedDemand, reorderSuggestion, confidence, trend]
+      properties:
+        medicineId: { type: integer }
+        medicineName: { type: string }
+        genericName: { type: string }
+        currentStock: { type: integer }
+        predictedDemand: { type: integer }
+        reorderSuggestion: { type: integer }
+        confidence: { type: number }
+        trend: { type: string, enum: [rising, stable, falling] }
+        healthStatus: { type: string, enum: [healthy, warning, critical] }
+        aiInsight: { type: string }
+        daysUntilStockout: { type: ["integer", "null"] }
+
+    TopMedicine:
+      type: object
+      required: [medicineId, medicineName, count, revenue]
+      properties:
+        medicineId: { type: integer }
+        medicineName: { type: string }
+        category: { type: string }
+        count: { type: integer }
+        revenue: { type: number }
+        trend: { type: string, enum: [up, down, stable] }
+        percentChange: { type: number }
+
+    MedicineSearchResult:
+      type: object
+      required: [query, totalResults, searchRadius, expansionLevel, results]
+      properties:
+        query: { type: string }
+        totalResults: { type: integer }
+        searchRadius: { type: number }
+        expansionLevel: { type: string, enum: [nearby, city, district, state, national] }
+        results:
+          type: array
+          items:
+            $ref: "#/components/schemas/SearchResultItem"
+        mapMarkers:
+          type: array
+          items:
+            $ref: "#/components/schemas/MapMarker"
+
+    SearchResultItem:
+      type: object
+      required: [medicine, pharmacy, price, quantity, distance, deliveryType, stockStatus]
+      properties:
+        medicine:
+          $ref: "#/components/schemas/Medicine"
+        pharmacy:
+          $ref: "#/components/schemas/Pharmacy"
+        price: { type: number }
+        quantity: { type: integer }
+        distance: { type: number }
+        distanceUnit: { type: string }
+        estimatedDelivery: { type: string }
+        deliveryType: { type: string, enum: [pickup, courier] }
+        stockStatus: { type: string, enum: [available, limited, outOfStock] }
+        matchScore: { type: number }
+
+    MapMarker:
+      type: object
+      required: [pharmacyId, pharmacyName, lat, lng, stockStatus]
+      properties:
+        pharmacyId: { type: integer }
+        pharmacyName: { type: string }
+        lat: { type: number }
+        lng: { type: number }
+        stockStatus: { type: string, enum: [available, limited, outOfStock, courier] }
+        price: { type: number }
+        quantity: { type: integer }
+
+    SearchSuggestion:
+      type: object
+      required: [text, type]
+      properties:
+        text: { type: string }
+        type: { type: string, enum: [medicine, generic, brand, category] }
+        medicineId: { type: ["integer", "null"] }
+        category: { type: ["string", "null"] }
+
+    Notification:
+      type: object
+      required: [id, type, title, message, isRead, createdAt]
+      properties:
+        id: { type: integer }
+        type: { type: string, enum: [info, success, warning, aiInsight] }
+        title: { type: string }
+        message: { type: string }
+        isRead: { type: boolean }
+        createdAt: { type: string }
+        actionLabel: { type: ["string", "null"] }
+        actionUrl: { type: ["string", "null"] }
+        relatedId: { type: ["integer", "null"] }
+        relatedType: { type: ["string", "null"] }

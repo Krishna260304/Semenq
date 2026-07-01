@@ -1,0 +1,823 @@
+import * as zod from 'zod';
+
+
+export const HealthCheckResponse = zod.object({
+  "status": zod.string()
+})
+
+
+export const listMedicinesQueryPageDefault = 1;
+export const listMedicinesQueryLimitDefault = 20;
+
+export const ListMedicinesQueryParams = zod.object({
+  "query": zod.coerce.string().optional(),
+  "category": zod.coerce.string().optional(),
+  "page": zod.coerce.number().default(listMedicinesQueryPageDefault),
+  "limit": zod.coerce.number().default(listMedicinesQueryLimitDefault)
+})
+
+export const ListMedicinesResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "genericName": zod.string(),
+  "category": zod.string(),
+  "manufacturer": zod.string(),
+  "composition": zod.string().optional(),
+  "dosage": zod.string().optional(),
+  "price": zod.number(),
+  "mrp": zod.number().optional(),
+  "imageUrl": zod.string(),
+  "requiresPrescription": zod.boolean().optional(),
+  "description": zod.string().nullish(),
+  "sideEffects": zod.string().nullish(),
+  "storageConditions": zod.string().nullish()
+})),
+  "total": zod.number(),
+  "page": zod.number(),
+  "limit": zod.number()
+})
+
+
+export const GetMedicineParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const GetMedicineResponse = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "genericName": zod.string(),
+  "category": zod.string(),
+  "manufacturer": zod.string(),
+  "composition": zod.string().optional(),
+  "dosage": zod.string().optional(),
+  "price": zod.number(),
+  "mrp": zod.number().optional(),
+  "imageUrl": zod.string(),
+  "requiresPrescription": zod.boolean().optional(),
+  "description": zod.string().nullish(),
+  "sideEffects": zod.string().nullish(),
+  "storageConditions": zod.string().nullish()
+})
+
+
+export const GetMedicineAvailabilityParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const GetMedicineAvailabilityResponse = zod.object({
+  "medicineId": zod.number(),
+  "zones": zod.array(zod.object({
+  "level": zod.enum(['nearby', 'city', 'district', 'state', 'national']),
+  "label": zod.string(),
+  "pharmacyCount": zod.number(),
+  "minPrice": zod.number(),
+  "estimatedDelivery": zod.string(),
+  "pharmacies": zod.array(zod.object({
+  "pharmacyId": zod.number(),
+  "pharmacyName": zod.string(),
+  "quantity": zod.number(),
+  "price": zod.number(),
+  "distance": zod.number(),
+  "distanceUnit": zod.string().optional(),
+  "estimatedDelivery": zod.string().optional(),
+  "deliveryType": zod.enum(['pickup', 'courier']).optional(),
+  "lat": zod.number().optional(),
+  "lng": zod.number().optional(),
+  "stockStatus": zod.enum(['available', 'limited', 'outOfStock']).optional()
+})).optional()
+}))
+})
+
+
+export const ListPharmaciesQueryParams = zod.object({
+  "city": zod.coerce.string().optional(),
+  "state": zod.coerce.string().optional(),
+  "lat": zod.coerce.number().optional(),
+  "lng": zod.coerce.number().optional(),
+  "radius": zod.coerce.number().optional()
+})
+
+export const ListPharmaciesResponseItem = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "ownerName": zod.string().optional(),
+  "address": zod.string(),
+  "city": zod.string(),
+  "state": zod.string(),
+  "pincode": zod.string().optional(),
+  "phone": zod.string(),
+  "email": zod.string().nullish(),
+  "lat": zod.number().optional(),
+  "lng": zod.number().optional(),
+  "isVerified": zod.boolean(),
+  "rating": zod.number(),
+  "reviewCount": zod.number().optional(),
+  "openTime": zod.string().optional(),
+  "closeTime": zod.string().optional(),
+  "offersCourier": zod.boolean().optional(),
+  "licenseNumber": zod.string().optional(),
+  "totalInventory": zod.number().optional()
+})
+export const ListPharmaciesResponse = zod.array(ListPharmaciesResponseItem)
+
+
+export const GetPharmacyParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const GetPharmacyResponse = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "ownerName": zod.string().optional(),
+  "address": zod.string(),
+  "city": zod.string(),
+  "state": zod.string(),
+  "pincode": zod.string().optional(),
+  "phone": zod.string(),
+  "email": zod.string().nullish(),
+  "lat": zod.number().optional(),
+  "lng": zod.number().optional(),
+  "isVerified": zod.boolean(),
+  "rating": zod.number(),
+  "reviewCount": zod.number().optional(),
+  "openTime": zod.string().optional(),
+  "closeTime": zod.string().optional(),
+  "offersCourier": zod.boolean().optional(),
+  "licenseNumber": zod.string().optional(),
+  "totalInventory": zod.number().optional()
+})
+
+
+export const GetPharmacyInventoryParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const GetPharmacyInventoryResponseItem = zod.object({
+  "id": zod.number(),
+  "medicineId": zod.number(),
+  "medicineName": zod.string(),
+  "genericName": zod.string().optional(),
+  "quantity": zod.number(),
+  "price": zod.number(),
+  "mrp": zod.number().optional(),
+  "expiryDate": zod.string(),
+  "batchNumber": zod.string().optional(),
+  "stockStatus": zod.enum(['inStock', 'lowStock', 'outOfStock']),
+  "reorderLevel": zod.number().optional(),
+  "lastRestocked": zod.string().optional()
+})
+export const GetPharmacyInventoryResponse = zod.array(GetPharmacyInventoryResponseItem)
+
+
+export const UpdateInventoryItemParams = zod.object({
+  "id": zod.coerce.number(),
+  "itemId": zod.coerce.number()
+})
+
+export const UpdateInventoryItemBody = zod.object({
+  "quantity": zod.number().optional(),
+  "price": zod.number().optional(),
+  "expiryDate": zod.string().optional(),
+  "reorderLevel": zod.number().optional()
+})
+
+export const UpdateInventoryItemResponse = zod.object({
+  "id": zod.number(),
+  "medicineId": zod.number(),
+  "medicineName": zod.string(),
+  "genericName": zod.string().optional(),
+  "quantity": zod.number(),
+  "price": zod.number(),
+  "mrp": zod.number().optional(),
+  "expiryDate": zod.string(),
+  "batchNumber": zod.string().optional(),
+  "stockStatus": zod.enum(['inStock', 'lowStock', 'outOfStock']),
+  "reorderLevel": zod.number().optional(),
+  "lastRestocked": zod.string().optional()
+})
+
+
+export const ListPrescriptionsResponseItem = zod.object({
+  "id": zod.number(),
+  "doctorName": zod.string().nullish(),
+  "patientName": zod.string().nullish(),
+  "hospitalName": zod.string().nullish(),
+  "uploadedAt": zod.string(),
+  "status": zod.enum(['processing', 'parsed', 'failed']),
+  "imageUrl": zod.string().nullish(),
+  "overallConfidence": zod.number().optional(),
+  "medicines": zod.array(zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "dosage": zod.string().nullish(),
+  "frequency": zod.string().nullish(),
+  "duration": zod.string().nullish(),
+  "confidence": zod.number(),
+  "matchedMedicineId": zod.number().nullish(),
+  "status": zod.enum(['confirmed', 'lowConfidence', 'unmatched']).optional()
+})),
+  "notes": zod.string().nullish()
+})
+export const ListPrescriptionsResponse = zod.array(ListPrescriptionsResponseItem)
+
+
+export const UploadPrescriptionBody = zod.object({
+  "imageBase64": zod.string(),
+  "mimeType": zod.string().optional()
+})
+
+export const UploadPrescriptionResponse = zod.object({
+  "id": zod.number(),
+  "doctorName": zod.string().nullish(),
+  "patientName": zod.string().nullish(),
+  "hospitalName": zod.string().nullish(),
+  "uploadedAt": zod.string(),
+  "status": zod.enum(['processing', 'parsed', 'failed']),
+  "imageUrl": zod.string().nullish(),
+  "overallConfidence": zod.number().optional(),
+  "medicines": zod.array(zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "dosage": zod.string().nullish(),
+  "frequency": zod.string().nullish(),
+  "duration": zod.string().nullish(),
+  "confidence": zod.number(),
+  "matchedMedicineId": zod.number().nullish(),
+  "status": zod.enum(['confirmed', 'lowConfidence', 'unmatched']).optional()
+})),
+  "notes": zod.string().nullish()
+})
+
+
+export const GetPrescriptionParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const GetPrescriptionResponse = zod.object({
+  "id": zod.number(),
+  "doctorName": zod.string().nullish(),
+  "patientName": zod.string().nullish(),
+  "hospitalName": zod.string().nullish(),
+  "uploadedAt": zod.string(),
+  "status": zod.enum(['processing', 'parsed', 'failed']),
+  "imageUrl": zod.string().nullish(),
+  "overallConfidence": zod.number().optional(),
+  "medicines": zod.array(zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "dosage": zod.string().nullish(),
+  "frequency": zod.string().nullish(),
+  "duration": zod.string().nullish(),
+  "confidence": zod.number(),
+  "matchedMedicineId": zod.number().nullish(),
+  "status": zod.enum(['confirmed', 'lowConfidence', 'unmatched']).optional()
+})),
+  "notes": zod.string().nullish()
+})
+
+
+export const ListReservationsQueryParams = zod.object({
+  "status": zod.enum(['pending', 'confirmed', 'ready', 'cancelled', 'expired']).optional(),
+  "pharmacyId": zod.coerce.number().optional()
+})
+
+export const ListReservationsResponseItem = zod.object({
+  "id": zod.number(),
+  "medicineId": zod.number(),
+  "medicineName": zod.string(),
+  "pharmacyId": zod.number(),
+  "pharmacyName": zod.string(),
+  "quantity": zod.number(),
+  "price": zod.number().optional(),
+  "totalAmount": zod.number().optional(),
+  "status": zod.enum(['pending', 'confirmed', 'ready', 'cancelled', 'expired']),
+  "deliveryType": zod.enum(['pickup', 'courier']).optional(),
+  "expiresAt": zod.string(),
+  "createdAt": zod.string(),
+  "prescriptionId": zod.number().nullish(),
+  "qrCode": zod.string().nullish(),
+  "notes": zod.string().nullish()
+})
+export const ListReservationsResponse = zod.array(ListReservationsResponseItem)
+
+
+export const CreateReservationBody = zod.object({
+  "medicineId": zod.number(),
+  "pharmacyId": zod.number(),
+  "quantity": zod.number(),
+  "deliveryType": zod.enum(['pickup', 'courier']),
+  "prescriptionId": zod.number().nullish(),
+  "notes": zod.string().nullish()
+})
+
+export const CreateReservationResponse = zod.object({
+  "id": zod.number(),
+  "medicineId": zod.number(),
+  "medicineName": zod.string(),
+  "pharmacyId": zod.number(),
+  "pharmacyName": zod.string(),
+  "quantity": zod.number(),
+  "price": zod.number().optional(),
+  "totalAmount": zod.number().optional(),
+  "status": zod.enum(['pending', 'confirmed', 'ready', 'cancelled', 'expired']),
+  "deliveryType": zod.enum(['pickup', 'courier']).optional(),
+  "expiresAt": zod.string(),
+  "createdAt": zod.string(),
+  "prescriptionId": zod.number().nullish(),
+  "qrCode": zod.string().nullish(),
+  "notes": zod.string().nullish()
+})
+
+
+export const GetReservationParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const GetReservationResponse = zod.object({
+  "id": zod.number(),
+  "medicineId": zod.number(),
+  "medicineName": zod.string(),
+  "pharmacyId": zod.number(),
+  "pharmacyName": zod.string(),
+  "quantity": zod.number(),
+  "price": zod.number().optional(),
+  "totalAmount": zod.number().optional(),
+  "status": zod.enum(['pending', 'confirmed', 'ready', 'cancelled', 'expired']),
+  "deliveryType": zod.enum(['pickup', 'courier']).optional(),
+  "expiresAt": zod.string(),
+  "createdAt": zod.string(),
+  "prescriptionId": zod.number().nullish(),
+  "qrCode": zod.string().nullish(),
+  "notes": zod.string().nullish()
+})
+
+
+export const UpdateReservationParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const UpdateReservationBody = zod.object({
+  "status": zod.enum(['confirmed', 'ready', 'cancelled']).optional(),
+  "notes": zod.string().optional()
+})
+
+export const UpdateReservationResponse = zod.object({
+  "id": zod.number(),
+  "medicineId": zod.number(),
+  "medicineName": zod.string(),
+  "pharmacyId": zod.number(),
+  "pharmacyName": zod.string(),
+  "quantity": zod.number(),
+  "price": zod.number().optional(),
+  "totalAmount": zod.number().optional(),
+  "status": zod.enum(['pending', 'confirmed', 'ready', 'cancelled', 'expired']),
+  "deliveryType": zod.enum(['pickup', 'courier']).optional(),
+  "expiresAt": zod.string(),
+  "createdAt": zod.string(),
+  "prescriptionId": zod.number().nullish(),
+  "qrCode": zod.string().nullish(),
+  "notes": zod.string().nullish()
+})
+
+
+export const ListOrdersQueryParams = zod.object({
+  "status": zod.enum(['placed', 'processing', 'packed', 'shipped', 'delivered', 'cancelled']).optional()
+})
+
+export const ListOrdersResponseItem = zod.object({
+  "id": zod.number(),
+  "reservationId": zod.number(),
+  "medicineName": zod.string().optional(),
+  "pharmacyName": zod.string().optional(),
+  "status": zod.enum(['placed', 'processing', 'packed', 'shipped', 'delivered', 'cancelled']),
+  "deliveryType": zod.enum(['pickup', 'courier']).optional(),
+  "totalAmount": zod.number(),
+  "paymentMethod": zod.string().optional(),
+  "paymentStatus": zod.enum(['pending', 'paid', 'failed', 'refunded']).optional(),
+  "deliveryAddress": zod.string().nullish(),
+  "trackingId": zod.string().nullish(),
+  "estimatedDelivery": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string().optional()
+})
+export const ListOrdersResponse = zod.array(ListOrdersResponseItem)
+
+
+export const CreateOrderBody = zod.object({
+  "reservationId": zod.number(),
+  "paymentMethod": zod.enum(['upi', 'card', 'netBanking', 'wallet']),
+  "deliveryAddress": zod.string().nullish()
+})
+
+export const CreateOrderResponse = zod.object({
+  "id": zod.number(),
+  "reservationId": zod.number(),
+  "medicineName": zod.string().optional(),
+  "pharmacyName": zod.string().optional(),
+  "status": zod.enum(['placed', 'processing', 'packed', 'shipped', 'delivered', 'cancelled']),
+  "deliveryType": zod.enum(['pickup', 'courier']).optional(),
+  "totalAmount": zod.number(),
+  "paymentMethod": zod.string().optional(),
+  "paymentStatus": zod.enum(['pending', 'paid', 'failed', 'refunded']).optional(),
+  "deliveryAddress": zod.string().nullish(),
+  "trackingId": zod.string().nullish(),
+  "estimatedDelivery": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string().optional()
+})
+
+
+export const GetOrderParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const GetOrderResponse = zod.object({
+  "id": zod.number(),
+  "reservationId": zod.number(),
+  "medicineName": zod.string().optional(),
+  "pharmacyName": zod.string().optional(),
+  "status": zod.enum(['placed', 'processing', 'packed', 'shipped', 'delivered', 'cancelled']),
+  "deliveryType": zod.enum(['pickup', 'courier']).optional(),
+  "totalAmount": zod.number(),
+  "paymentMethod": zod.string().optional(),
+  "paymentStatus": zod.enum(['pending', 'paid', 'failed', 'refunded']).optional(),
+  "deliveryAddress": zod.string().nullish(),
+  "trackingId": zod.string().nullish(),
+  "estimatedDelivery": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string().optional()
+})
+
+
+export const GetOrderTrackingParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const GetOrderTrackingResponse = zod.object({
+  "orderId": zod.number(),
+  "currentStatus": zod.string(),
+  "currentLat": zod.number().nullish(),
+  "currentLng": zod.number().nullish(),
+  "estimatedDelivery": zod.string().optional(),
+  "timeline": zod.array(zod.object({
+  "stage": zod.string(),
+  "label": zod.string(),
+  "description": zod.string().optional(),
+  "timestamp": zod.string().nullable(),
+  "completed": zod.boolean()
+}))
+})
+
+
+export const GetMyProfileResponse = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "email": zod.string(),
+  "phone": zod.string(),
+  "role": zod.enum(['patient', 'pharmacy', 'admin']),
+  "city": zod.string().optional(),
+  "state": zod.string().optional(),
+  "pincode": zod.string().optional(),
+  "address": zod.string().optional(),
+  "avatarUrl": zod.string().nullish(),
+  "isVerified": zod.boolean().optional(),
+  "createdAt": zod.string().optional()
+})
+
+
+export const UpdateMyProfileBody = zod.object({
+  "name": zod.string().optional(),
+  "phone": zod.string().optional(),
+  "city": zod.string().optional(),
+  "state": zod.string().optional(),
+  "pincode": zod.string().optional(),
+  "address": zod.string().optional()
+})
+
+export const UpdateMyProfileResponse = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "email": zod.string(),
+  "phone": zod.string(),
+  "role": zod.enum(['patient', 'pharmacy', 'admin']),
+  "city": zod.string().optional(),
+  "state": zod.string().optional(),
+  "pincode": zod.string().optional(),
+  "address": zod.string().optional(),
+  "avatarUrl": zod.string().nullish(),
+  "isVerified": zod.boolean().optional(),
+  "createdAt": zod.string().optional()
+})
+
+
+export const GetPatientDashboardResponse = zod.object({
+  "pendingReservations": zod.number(),
+  "activeOrders": zod.number(),
+  "totalOrders": zod.number(),
+  "recentPrescriptions": zod.array(zod.object({
+  "id": zod.number(),
+  "doctorName": zod.string().nullish(),
+  "patientName": zod.string().nullish(),
+  "hospitalName": zod.string().nullish(),
+  "uploadedAt": zod.string(),
+  "status": zod.enum(['processing', 'parsed', 'failed']),
+  "imageUrl": zod.string().nullish(),
+  "overallConfidence": zod.number().optional(),
+  "medicines": zod.array(zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "dosage": zod.string().nullish(),
+  "frequency": zod.string().nullish(),
+  "duration": zod.string().nullish(),
+  "confidence": zod.number(),
+  "matchedMedicineId": zod.number().nullish(),
+  "status": zod.enum(['confirmed', 'lowConfidence', 'unmatched']).optional()
+})),
+  "notes": zod.string().nullish()
+})),
+  "upcomingReservations": zod.array(zod.object({
+  "id": zod.number(),
+  "medicineId": zod.number(),
+  "medicineName": zod.string(),
+  "pharmacyId": zod.number(),
+  "pharmacyName": zod.string(),
+  "quantity": zod.number(),
+  "price": zod.number().optional(),
+  "totalAmount": zod.number().optional(),
+  "status": zod.enum(['pending', 'confirmed', 'ready', 'cancelled', 'expired']),
+  "deliveryType": zod.enum(['pickup', 'courier']).optional(),
+  "expiresAt": zod.string(),
+  "createdAt": zod.string(),
+  "prescriptionId": zod.number().nullish(),
+  "qrCode": zod.string().nullish(),
+  "notes": zod.string().nullish()
+})),
+  "recentOrders": zod.array(zod.object({
+  "id": zod.number(),
+  "reservationId": zod.number(),
+  "medicineName": zod.string().optional(),
+  "pharmacyName": zod.string().optional(),
+  "status": zod.enum(['placed', 'processing', 'packed', 'shipped', 'delivered', 'cancelled']),
+  "deliveryType": zod.enum(['pickup', 'courier']).optional(),
+  "totalAmount": zod.number(),
+  "paymentMethod": zod.string().optional(),
+  "paymentStatus": zod.enum(['pending', 'paid', 'failed', 'refunded']).optional(),
+  "deliveryAddress": zod.string().nullish(),
+  "trackingId": zod.string().nullish(),
+  "estimatedDelivery": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string().optional()
+})).optional(),
+  "aiRecommendations": zod.array(zod.object({
+  "id": zod.number(),
+  "type": zod.enum(['refill', 'alternative', 'saving', 'alert']),
+  "title": zod.string(),
+  "description": zod.string(),
+  "medicineId": zod.number().nullish(),
+  "medicineName": zod.string().nullish(),
+  "actionLabel": zod.string().nullish()
+}))
+})
+
+
+export const searchMedicinesQueryRadiusDefault = 5;
+export const searchMedicinesQuerySortByDefault = `bestMatch`;
+
+export const SearchMedicinesQueryParams = zod.object({
+  "q": zod.coerce.string(),
+  "lat": zod.coerce.number().optional(),
+  "lng": zod.coerce.number().optional(),
+  "radius": zod.coerce.number().default(searchMedicinesQueryRadiusDefault),
+  "sortBy": zod.enum(['nearest', 'fastest', 'cheapest', 'bestMatch']).default(searchMedicinesQuerySortByDefault)
+})
+
+export const SearchMedicinesResponse = zod.object({
+  "query": zod.string(),
+  "totalResults": zod.number(),
+  "searchRadius": zod.number(),
+  "expansionLevel": zod.enum(['nearby', 'city', 'district', 'state', 'national']),
+  "results": zod.array(zod.object({
+  "medicine": zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "genericName": zod.string(),
+  "category": zod.string(),
+  "manufacturer": zod.string(),
+  "composition": zod.string().optional(),
+  "dosage": zod.string().optional(),
+  "price": zod.number(),
+  "mrp": zod.number().optional(),
+  "imageUrl": zod.string(),
+  "requiresPrescription": zod.boolean().optional(),
+  "description": zod.string().nullish(),
+  "sideEffects": zod.string().nullish(),
+  "storageConditions": zod.string().nullish()
+}),
+  "pharmacy": zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "ownerName": zod.string().optional(),
+  "address": zod.string(),
+  "city": zod.string(),
+  "state": zod.string(),
+  "pincode": zod.string().optional(),
+  "phone": zod.string(),
+  "email": zod.string().nullish(),
+  "lat": zod.number().optional(),
+  "lng": zod.number().optional(),
+  "isVerified": zod.boolean(),
+  "rating": zod.number(),
+  "reviewCount": zod.number().optional(),
+  "openTime": zod.string().optional(),
+  "closeTime": zod.string().optional(),
+  "offersCourier": zod.boolean().optional(),
+  "licenseNumber": zod.string().optional(),
+  "totalInventory": zod.number().optional()
+}),
+  "price": zod.number(),
+  "quantity": zod.number(),
+  "distance": zod.number(),
+  "distanceUnit": zod.string().optional(),
+  "estimatedDelivery": zod.string().optional(),
+  "deliveryType": zod.enum(['pickup', 'courier']),
+  "stockStatus": zod.enum(['available', 'limited', 'outOfStock']),
+  "matchScore": zod.number().optional()
+})),
+  "mapMarkers": zod.array(zod.object({
+  "pharmacyId": zod.number(),
+  "pharmacyName": zod.string(),
+  "lat": zod.number(),
+  "lng": zod.number(),
+  "stockStatus": zod.enum(['available', 'limited', 'outOfStock', 'courier']),
+  "price": zod.number().optional(),
+  "quantity": zod.number().optional()
+})).optional()
+})
+
+
+export const GetSearchSuggestionsQueryParams = zod.object({
+  "q": zod.coerce.string()
+})
+
+export const GetSearchSuggestionsResponseItem = zod.object({
+  "text": zod.string(),
+  "type": zod.enum(['medicine', 'generic', 'brand', 'category']),
+  "medicineId": zod.number().nullish(),
+  "category": zod.string().nullish()
+})
+export const GetSearchSuggestionsResponse = zod.array(GetSearchSuggestionsResponseItem)
+
+
+export const GetPharmacyDashboardResponse = zod.object({
+  "totalInventory": zod.number(),
+  "lowStockCount": zod.number(),
+  "outOfStockCount": zod.number().optional(),
+  "todayReservations": zod.number(),
+  "pendingReservations": zod.number(),
+  "confirmedReservations": zod.number().optional(),
+  "todayRevenue": zod.number(),
+  "monthlyRevenue": zod.number(),
+  "courierRequests": zod.number(),
+  "recentReservations": zod.array(zod.object({
+  "id": zod.number(),
+  "medicineId": zod.number(),
+  "medicineName": zod.string(),
+  "pharmacyId": zod.number(),
+  "pharmacyName": zod.string(),
+  "quantity": zod.number(),
+  "price": zod.number().optional(),
+  "totalAmount": zod.number().optional(),
+  "status": zod.enum(['pending', 'confirmed', 'ready', 'cancelled', 'expired']),
+  "deliveryType": zod.enum(['pickup', 'courier']).optional(),
+  "expiresAt": zod.string(),
+  "createdAt": zod.string(),
+  "prescriptionId": zod.number().nullish(),
+  "qrCode": zod.string().nullish(),
+  "notes": zod.string().nullish()
+})).optional(),
+  "topSellingMedicines": zod.array(zod.object({
+  "medicineId": zod.number(),
+  "medicineName": zod.string(),
+  "category": zod.string().optional(),
+  "count": zod.number(),
+  "revenue": zod.number(),
+  "trend": zod.enum(['up', 'down', 'stable']).optional(),
+  "percentChange": zod.number().optional()
+})).optional(),
+  "revenueByDay": zod.array(zod.object({
+  "date": zod.string(),
+  "revenue": zod.number(),
+  "orders": zod.number()
+})).optional()
+})
+
+
+export const getDemandForecastQueryDaysDefault = 30;
+
+export const GetDemandForecastQueryParams = zod.object({
+  "days": zod.coerce.number().default(getDemandForecastQueryDaysDefault)
+})
+
+export const GetDemandForecastResponseItem = zod.object({
+  "medicineId": zod.number(),
+  "medicineName": zod.string(),
+  "genericName": zod.string().optional(),
+  "currentStock": zod.number(),
+  "predictedDemand": zod.number(),
+  "reorderSuggestion": zod.number(),
+  "confidence": zod.number(),
+  "trend": zod.enum(['rising', 'stable', 'falling']),
+  "healthStatus": zod.enum(['healthy', 'warning', 'critical']).optional(),
+  "aiInsight": zod.string().optional(),
+  "daysUntilStockout": zod.number().nullish()
+})
+export const GetDemandForecastResponse = zod.array(GetDemandForecastResponseItem)
+
+
+export const GetAdminDashboardResponse = zod.object({
+  "totalUsers": zod.number(),
+  "totalPharmacies": zod.number(),
+  "totalMedicines": zod.number(),
+  "totalOrders": zod.number(),
+  "monthlyRevenue": zod.number(),
+  "activeReservations": zod.number().optional(),
+  "pendingVerifications": zod.number().optional(),
+  "platformHealth": zod.object({
+  "serverStatus": zod.enum(['healthy', 'degraded', 'down']),
+  "dbStatus": zod.enum(['healthy', 'degraded', 'down']),
+  "apiStatus": zod.enum(['healthy', 'degraded', 'down']),
+  "apiResponseTime": zod.number(),
+  "uptime": zod.number(),
+  "errorRate": zod.number().optional()
+}),
+  "recentActivity": zod.array(zod.object({
+  "id": zod.number(),
+  "type": zod.enum(['userRegistered', 'pharmacyVerified', 'orderPlaced', 'paymentReceived', 'alert']),
+  "description": zod.string(),
+  "timestamp": zod.string(),
+  "metadata": zod.string().optional()
+})).optional(),
+  "userGrowth": zod.array(zod.object({
+  "date": zod.string(),
+  "revenue": zod.number(),
+  "orders": zod.number()
+})).optional()
+})
+
+
+export const getTopMedicinesQueryLimitDefault = 10;
+
+export const GetTopMedicinesQueryParams = zod.object({
+  "limit": zod.coerce.number().default(getTopMedicinesQueryLimitDefault)
+})
+
+export const GetTopMedicinesResponseItem = zod.object({
+  "medicineId": zod.number(),
+  "medicineName": zod.string(),
+  "category": zod.string().optional(),
+  "count": zod.number(),
+  "revenue": zod.number(),
+  "trend": zod.enum(['up', 'down', 'stable']).optional(),
+  "percentChange": zod.number().optional()
+})
+export const GetTopMedicinesResponse = zod.array(GetTopMedicinesResponseItem)
+
+
+export const ListNotificationsQueryParams = zod.object({
+  "unreadOnly": zod.coerce.boolean().optional()
+})
+
+export const ListNotificationsResponseItem = zod.object({
+  "id": zod.number(),
+  "type": zod.enum(['info', 'success', 'warning', 'aiInsight']),
+  "title": zod.string(),
+  "message": zod.string(),
+  "isRead": zod.boolean(),
+  "createdAt": zod.string(),
+  "actionLabel": zod.string().nullish(),
+  "actionUrl": zod.string().nullish(),
+  "relatedId": zod.number().nullish(),
+  "relatedType": zod.string().nullish()
+})
+export const ListNotificationsResponse = zod.array(ListNotificationsResponseItem)
+
+
+export const MarkNotificationReadParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const MarkNotificationReadResponse = zod.object({
+  "id": zod.number(),
+  "type": zod.enum(['info', 'success', 'warning', 'aiInsight']),
+  "title": zod.string(),
+  "message": zod.string(),
+  "isRead": zod.boolean(),
+  "createdAt": zod.string(),
+  "actionLabel": zod.string().nullish(),
+  "actionUrl": zod.string().nullish(),
+  "relatedId": zod.number().nullish(),
+  "relatedType": zod.string().nullish()
+})
+
+

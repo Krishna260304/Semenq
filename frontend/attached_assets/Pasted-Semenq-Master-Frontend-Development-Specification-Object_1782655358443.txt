@@ -1,0 +1,254 @@
+Semenq: Master Frontend Development Specification
+Objective: Design and generate a world-class premium web application frontend named Semenq.
+This is NOT a hospital management system, government healthcare portal, or admin dashboard template. Semenq should feel like a funded AI healthcare startup with an exceptional user experience, premium aesthetics, intuitive navigation, and modern interactions.
+
+Every screen should look polished enough that users believe they are using a product built by a company valued at hundreds of millions of dollars. The interface should combine the elegance of Apple, the premium feel of Stripe, the simplicity of Notion, the smooth interactions of Linear, and the usability of Google Maps.
+
+1. Product Vision
+Semenq is an AI-powered national medicine accessibility platform designed to solve one of the biggest healthcare problems faced by patients: finding prescribed medicines quickly, easily, and reliably.
+
+Unlike conventional pharmacy applications, Semenq intelligently searches through multiple availability levels:
+Nearby Pharmacies → Entire City → District → State → Entire India
+
+If medicines are unavailable locally, users can reserve medicines from pharmacies located in other states and request courier delivery directly from the application. The system should feel intelligent, proactive, and always working on the user's behalf.
+
+Primary Users
+Patient: Uploads a prescription, finds medicines, reserves them, pays securely, and collects locally or via courier. The experience requires minimal clicks and is understandable for all age groups.
+
+Pharmacy: Manages inventory, reservations, demand forecasting, sales analytics, and courier requests. Prioritizes simplicity and operational efficiency.
+
+Admin: Oversees users, pharmacies, medicines, analytics, reports, platform health, and overall ecosystem management.
+
+Core Product Principles
+Simplicity: Interface must guide naturally; users should never wonder what to do next.
+
+Speed: Instantaneous feel, optimistic interactions, and skeleton loaders instead of empty screens.
+
+Trust: Clean spacing, premium typography, soft colors, and reassuring visual confirmations.
+
+Accessibility: Large buttons, high contrast, keyboard/screen reader support, and readable typography.
+
+Intelligence: AI-assisted proactive interactions (suggesting actions, explaining processes, reducing manual work).
+
+2. Brand Identity & Personality
+Brand Name: Semenq
+
+Meaning: "Connecting people with medicines through intelligent technology."
+
+Brand Promise: "No patient should struggle to find prescribed medicines."
+
+Tone: Professional, friendly, helpful, calm, confident, and optimistic. Avoid robotic tones or heavy medical jargon.
+
+Experience Goals: Elicit confidence during searches, relief upon finding medicines, security during payments, and excitement when interacting with AI features.
+
+3. Design System & Color Psychology
+Color Palette
+Primary (Royal Blue - #2563EB): Primary buttons, links, active navigation, charts, interactive elements.
+
+Secondary (Emerald Green - #10B981): Success states, confirmed reservations, available medicines.
+
+Accent (Purple - #7C3AED): AI-related features, prescription parsing, smart search, demand forecast.
+
+Warning (Amber - #F59E0B): Low stock, expiring reservations, pending verification.
+
+Danger (Red - #EF4444): Errors, out-of-stock, failed payments.
+
+Neutrals: Background (#F8FAFC), Section Background (#F1F5F9), Card Background (#FFFFFF), Primary Text (#0F172A), Secondary Text (#64748B), Border (#E2E8F0), Divider (#CBD5E1).
+
+Gradients & Elevation
+Hero Gradient: Royal Blue → Purple → Soft White
+
+Feature Cards: White → Light Blue → Light Purple
+
+Elevation System: * Level 1: Navigation Bar (Very soft shadow)
+
+Level 2: Cards (Soft shadow, Rounded)
+
+Level 3: Floating Panels (Medium shadow, Blurred background)
+
+Level 4: Dialogs (Large shadow, Glass effect)
+
+Glassmorphism: Use sparingly (Hero section, Navigation, Floating widgets, AI popups).
+
+Border Radius & Spacing
+Radius: Buttons (18px), Cards (24px), Dialogs (28px), Inputs (16px), Search Bar (28px), Profile Images (Fully Rounded). Avoid sharp edges.
+
+Spacing Rhythm: 4px, 8px, 12px, 16px, 20px, 24px, 32px, 48px, 64px, 96px, 128px.
+
+Grid System
+Desktop: 12-column grid | Tablet: 8-column grid | Mobile: 4-column grid.
+
+Maximum Content Width: 1440px.
+
+4. Typography & Component Library
+Typography System
+Primary Font: Inter (Fallback: Plus Jakarta Sans / System sans-serif). Never use serif fonts.
+
+Hierarchy: * Hero Heading: 64px (Bold, -2% tracking)
+
+Large Section Heading: 48px (Bold)
+
+Page Heading: 40px (Bold)
+
+Dashboard/Section Headings: 32px / 28px (Semi Bold)
+
+Card Heading: 22px (Medium)
+
+Body (Large/Normal): 18px / 16px (Regular)
+
+Small Text / Captions: 14px (Regular) / 12px (Medium)
+
+Component Specifications
+Iconography: Use only Lucide React Icons. Simple, consistent stroke width, no emojis.
+
+Buttons: Large, rounded, hover lift/brightness increase. Include primary (blue gradient), secondary (white/blue border), ghost, and icon variants.
+
+Inputs & Search: Large height, floating labels, animated focus states (blue outline). The primary Search Bar should emulate Google Search (large, soft shadow, instant suggestions).
+
+Cards: The foundation of the UI. Must include rounded corners, large padding, soft shadows, and subtle hover lifts (Translate Y -4px, 250ms smooth easing).
+
+Card Variants required: Medicine Card, Prescription Card, Reservation Card, Order Card, Profile Card, Analytics Card, AI Insight Card, Notification Card.
+
+Empty & Error States: Never show blank screens or raw errors. Use beautiful illustrations with actionable CTAs and friendly explanations.
+
+Loaders: Skeleton cards, animated AI scanning, progress indicators. Never show spinning circles alone.
+
+5. Landing Website Architecture
+The landing page must tell a story and guide users naturally toward platform registration. It should be fully responsive and feature smooth Framer Motion scroll animations.
+
+Section Order:
+
+Floating Navigation Bar: Glass effect, sticky on scroll.
+
+Hero Section: Split layout with large heading and a looping animated product preview (Prescription Upload → AI Scanning → Map → Reserve → Deliver).
+
+Trusted Statistics: Animated counters.
+
+Core Features: Premium feature cards lifting on hover.
+
+How It Works: Interactive timeline.
+
+Smart Search Expansion: Animated map showing search progression from Nearby → City → District → State → National.
+
+AI Prescription Parsing Showcase: Animated sequence of an uploaded prescription being scanned and extracted.
+
+National Medicine Discovery: India map showing cross-state courier connections.
+
+Benefits (Patients & Pharmacies): Alternating layouts with illustrations.
+
+Demand Forecasting Showcase: Animated dashboard analytics with AI accents.
+
+Testimonials & FAQ: Premium carousel and animated accordions.
+
+Final CTA & Premium Footer: Large gradient background CTA and multi-column footer.
+
+6. Authentication Experience (Login + Registration)
+Layout: Split-screen on desktop (Left: Brand storytelling with gradient/illustrations; Right: Authentication card with glass effect).
+
+Registration Wizard: Multi-step wizard based on role selection (Patient vs. Pharmacy).
+
+Patient: Personal Info → Address → Account Security.
+
+Pharmacy: Business Info → License/Address → Security & Uploads.
+
+Features: Real-time validation, password strength indicators, OTP/Email verification screens, and smooth transitions. Avoid long scrolling forms.
+
+7. Dashboards (Patient, Pharmacy, Admin)
+Patient Dashboard
+Greeting: "Good Morning, [User Name] 👋" with current date/time.
+
+Layout: Global Search → Quick Actions (Upload, Search, Track) → Dashboard Overview (Pending Orders, Active Courier) → AI Recommendations (Purple styling) → Upcoming Reservations & Order History.
+
+Sidebar: Search, Upload, Reservations, Orders, Payments, Profile.
+
+Pharmacy Dashboard
+Layout: Inventory Snapshot (Total, Low Stock) → Today's Reservations (Approve/Reject actions) → Payment & Courier Overview → AI Demand Forecast Preview.
+
+Sidebar: Inventory, Reservations, Payments, Demand Forecast, Analytics, Customers.
+
+Admin Dashboard
+Layout: Platform Health Widgets (Server, DB, API status) → Premium Overview Cards (Total Users, Pharmacies, Revenue) → System Logs (Modern timeline).
+
+Management: Grid-based cards for User, Pharmacy, and Medicine management (avoid large boring tables).
+
+8. AI Prescription Upload & Scanning Experience
+This must feel futuristic, intelligent, and highly premium.
+
+Upload Screen: Drag & drop zone with animated borders and smooth file validation.
+
+Scanning Animation: A thin blue scanning line moves over the prescription image. Detected text is highlighted, and medicine names appear live in a side panel alongside a dynamic Confidence Meter.
+
+Status Panel: Displays Current Task, Progress %, and Estimated Time.
+
+Results: Extracted medicines appear as premium cards. Low-confidence matches allow manual editing. Includes a primary "Search All Medicines" CTA.
+
+9. Intelligent Medicine Search & National Expansion
+This is the flagship feature, combining Google Search speed with Google Maps usability.
+
+Search Progression: The system visually expands the search radius if a medicine is unavailable locally (Nearby → City → District → State → National) using an animated progress widget.
+
+Results Layout: Split screen on desktop (Left: Result Cards, Right: Interactive Map).
+
+Result Cards: Image, composition, price, available quantity, availability badges, distance, estimated delivery, and a "Reserve" button. Prioritized by Best Match (Nearest/Fastest/Lowest Price).
+
+Interactive Map: Modern light theme. Color-coded markers (Green: Available, Yellow: Limited, Red: Out of Stock, Purple: Courier). Clicking a marker opens a detailed pharmacy card with route previews.
+
+10. Medicine Details & Reservation Flow
+Details Page: Medicine overview, AI Insights panel (e.g., "Nearest pharmacy has limited stock"), and an Availability Timeline (Nearby → National).
+
+Reservation Flow (Horizontal Stepper): 1. Choose Pharmacy
+2. Review Medicine
+3. Choose Pickup/Courier
+4. Summary (with an animated countdown reservation timer)
+5. Payment
+6. Success Confirmation with QR generation.
+
+11. Payment Flow & QR Pickup
+Checkout Layout: Order Summary alongside Payment Methods (UPI, Card, Net Banking). Clean, transparent price breakdowns.
+
+Processing: Animated processing screen (Connecting → Verifying → Confirming → Generating QR).
+
+QR Digital Pass: A premium, minimal screen displaying the QR code, reservation countdown timer, and pickup information. Verification triggers a smooth success animation.
+
+12. Courier Tracking & Notifications
+Tracking Layout: Split screen (Left: Order timeline, Right: Live Interactive Map).
+
+Timeline: Animated stages (Packed → Picked Up → In Transit → Delivered).
+
+Notification Center: Floating panel accessible from the top navigation. Categorized notifications (Information, Success, Warning, AI Insight) with unread indicators and quick actions. Toast notifications for immediate system feedback.
+
+13. Demand Forecast (Pharmacy) & Profile Settings
+Demand Forecast: Visual insights over raw numbers. Shows predicted high-demand medicines, inventory health indicators (Green/Amber/Red), and AI text recommendations (e.g., "Consider reordering [X] units based on recent search volume").
+
+Profile Settings: Modeled after Google Account settings. Clean sections for Personal Info, Addresses, Payment Methods, Notification Preferences, and Security.
+
+14. Responsive Design & Mobile UX
+Desktop-First, PWA-Ready: The application must provide a premium SaaS experience on desktop and adapt intelligently to mobile. Never simply shrink elements.
+
+Mobile Adaptations: Convert horizontal tables to stacked cards, use slide-in bottom sheets for maps and filters, implement sticky bottom CTAs for primary actions, and ensure all touch targets are at least 48px high.
+
+Navigation: Floating bottom navigation for mobile, collapsible sidebars for tablets.
+
+15. Development, Accessibility & Data Standards
+Accessibility (WCAG 2.2 AA)
+Ensure full keyboard navigation (Tab, Enter, Esc, Space).
+
+Implement screen reader support (ARIA labels, roles).
+
+Design color-independent indicators (always pair colors with icons).
+
+Support reduced motion preferences.
+
+Realistic Data Population (No Generic Dummies)
+Requirement: Use highly realistic, domain-specific placeholder data throughout the frontend generation.
+
+Avoid: Generic text like "Lorem Ipsum", "John Doe", "ABC Company", or repetitive dummy variables.
+
+Implementation: Populate components with authentic-sounding medicine names, accurate dosages, realistic Indian geographical locations, plausible pharmacy names, and believable AI confidence scores and analytics numbers. The data must reflect a real-world healthcare ecosystem.
+
+AI Code-Generation Optimization (Lovable/Stitch)
+Stack: Next.js + React + TypeScript + Tailwind CSS + shadcn/ui + Framer Motion + Lucide React.
+
+Architecture: Component-first structure (/components, /layouts, /pages, etc.). Do not hardcode values inside components; use centralized mock data to prepare for backend integration.
+
+Quality Standard: Do not generate wireframes or basic CRUD dashboards. Prioritize premium aesthetics, smooth transitions, and exact adherence to this design system. The final output must look and feel like a fully launched, venture-backed product ready for presentation.
