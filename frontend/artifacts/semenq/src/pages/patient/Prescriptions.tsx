@@ -6,21 +6,14 @@ import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
 import { useListPrescriptions } from "@workspace/api-client-react";
 import { SkeletonCard } from "@/components/SkeletonCard";
-import { sampleUser } from "@/lib/mockData";
-
-const mockPrescriptions = [
-  { id: 1, doctorName: "Dr. Ananya Sharma", hospitalName: "Apollo Hospitals, Mumbai", uploadedAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(), status: "parsed", overallConfidence: 94.2, medicines: [{ name: "Metformin 500mg", confidence: 97, status: "confirmed" }, { name: "Atorvastatin 20mg", confidence: 92, status: "confirmed" }, { name: "Pantoprazole 40mg", confidence: 88, status: "confirmed" }, { name: "Aspirin 75mg", confidence: 61, status: "lowConfidence" }], patientName: "Arjun Mehta", imageUrl: null, notes: null },
-  { id: 2, doctorName: "Dr. Rajan Mehta", hospitalName: "Lilavati Hospital, Mumbai", uploadedAt: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString(), status: "parsed", overallConfidence: 91.8, medicines: [{ name: "Amoxicillin 500mg", confidence: 96, status: "confirmed" }, { name: "Cetirizine 10mg", confidence: 88, status: "confirmed" }], patientName: "Arjun Mehta", imageUrl: null, notes: null },
-  { id: 3, doctorName: "Dr. Priya Nair", hospitalName: "Kokilaben Hospital, Mumbai", uploadedAt: new Date(Date.now() - 25 * 24 * 60 * 60 * 1000).toISOString(), status: "parsed", overallConfidence: 89.4, medicines: [{ name: "Losartan 50mg", confidence: 93, status: "confirmed" }, { name: "Amlodipine 5mg", confidence: 86, status: "confirmed" }], patientName: "Arjun Mehta", imageUrl: null, notes: null },
-];
 
 export default function Prescriptions() {
   const { data, isLoading } = useListPrescriptions();
-  const prescriptions = (Array.isArray(data) ? data : mockPrescriptions) as typeof mockPrescriptions;
+  const prescriptions = (Array.isArray(data) ? data : []) as any[];
 
   return (
     <PatientLayout>
-      <TopBar title="My Prescriptions" userName={sampleUser.name} />
+      <TopBar title="My Prescriptions" userName="Guest" />
 
       <div className="p-6 max-w-3xl">
         <div className="flex items-center justify-between mb-6">
@@ -52,14 +45,6 @@ export default function Prescriptions() {
                       <Clock className="w-3 h-3" />
                       {new Date(rx.uploadedAt).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })}
                     </p>
-
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      {rx.medicines.map((med: any) => (
-                        <span key={med.name} className={`text-xs px-2.5 py-1 rounded-full border font-medium ${med.status === "confirmed" ? "bg-muted text-foreground border-border" : "bg-warning/10 text-warning border-warning/20"}`}>
-                          {med.name}
-                        </span>
-                      ))}
-                    </div>
 
                     <div className="mt-3 flex items-center gap-3">
                       <div className="flex items-center gap-1.5">

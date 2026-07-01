@@ -35,10 +35,10 @@ router.get("/orders", async (req, res) => {
 
     let filtered = list;
     if (status) filtered = filtered.filter(o => o.status === status);
-    res.json(filtered);
+    return res.json(filtered);
   } catch (e) {
     req.log.error(e);
-    res.status(500).json({ error: "Failed to fetch orders" });
+    return res.status(500).json({ error: "Failed to fetch orders" });
   }
 });
 
@@ -46,10 +46,10 @@ router.get("/orders/:id", async (req, res) => {
   try {
     const [o] = await db.select().from(ordersTable).where(eq(ordersTable.id, Number(req.params.id)));
     if (!o) return res.status(404).json({ error: "Order not found" });
-    res.json(o);
+    return res.json(o);
   } catch (e) {
     req.log.error(e);
-    res.status(500).json({ error: "Failed to fetch order" });
+    return res.status(500).json({ error: "Failed to fetch order" });
   }
 });
 
@@ -66,10 +66,10 @@ router.get("/orders/:id/tracking", async (req, res) => {
       timestamp: i <= currentIdx ? new Date(Date.now() - (currentIdx - i) * 6 * 60 * 60 * 1000).toISOString() : null,
       completed: i <= currentIdx,
     }));
-    res.json({ orderId: o.id, currentStatus: o.status, estimatedDelivery: o.estimatedDelivery, timeline });
+    return res.json({ orderId: o.id, currentStatus: o.status, estimatedDelivery: o.estimatedDelivery, timeline });
   } catch (e) {
     req.log.error(e);
-    res.status(500).json({ error: "Failed to fetch tracking" });
+    return res.status(500).json({ error: "Failed to fetch tracking" });
   }
 });
 
@@ -92,10 +92,10 @@ router.post("/orders", async (req, res) => {
       estimatedDelivery: res_.deliveryType === "courier" ? "2-3 business days" : "Ready for pickup",
     }).returning();
     await db.update(reservationsTable).set({ status: "confirmed" }).where(eq(reservationsTable.id, Number(reservationId)));
-    res.status(201).json(order);
+    return res.status(201).json(order);
   } catch (e) {
     req.log.error(e);
-    res.status(500).json({ error: "Failed to create order" });
+    return res.status(500).json({ error: "Failed to create order" });
   }
 });
 

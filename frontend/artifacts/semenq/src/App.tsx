@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { Switch, Route, Router as WouterRouter } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import NotFound from "@/pages/not-found";
@@ -25,6 +26,7 @@ import AdminDashboard from "@/pages/admin/Dashboard";
 import AdminUsers from "@/pages/admin/Users";
 import AdminPharmacies from "@/pages/admin/Pharmacies";
 import AdminMedicines from "@/pages/admin/Medicines";
+import { useRealtimeRefresh } from "@/hooks/use-realtime-refresh";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -35,6 +37,18 @@ const queryClient = new QueryClient({
     },
   },
 });
+
+function useRealtimeInvalidation() {
+  useEffect(() => {
+    const socket = new WebSocket("ws://127.0.0.1:8000/api/realtime/ws");
+
+    socket.addEventListener("message", () => {
+      queryClient.invalidateQueries();
+    });
+
+    return () => socket.close();
+  }, []);
+}
 
 function Router() {
   return (
@@ -69,6 +83,8 @@ function Router() {
 }
 
 function App() {
+  useRealtimeRefresh(queryClient);
+
   return (
     <QueryClientProvider client={queryClient}>
       <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>

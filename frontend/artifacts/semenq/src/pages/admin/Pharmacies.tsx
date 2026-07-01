@@ -7,13 +7,12 @@ import { useState } from "react";
 import { motion } from "framer-motion";
 import { useListPharmacies } from "@workspace/api-client-react";
 import { toast } from "sonner";
-import { pharmacies } from "@/lib/mockData";
 
 export default function AdminPharmacies() {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState("all");
   const { data } = useListPharmacies();
-  const list = (Array.isArray(data) ? data : pharmacies) as typeof pharmacies;
+  const list = (Array.isArray(data) ? data : []) as any[];
 
   const filtered = list.filter(p => {
     const match = p.name.toLowerCase().includes(query.toLowerCase()) || p.city.toLowerCase().includes(query.toLowerCase());

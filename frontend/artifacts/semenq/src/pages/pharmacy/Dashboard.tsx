@@ -8,39 +8,25 @@ import { Link } from "wouter";
 import { useGetPharmacyDashboard, useUpdateReservation } from "@workspace/api-client-react";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { toast } from "sonner";
-import { samplePharmacyUser } from "@/lib/mockData";
-
-const mockDashboard = {
-  totalInventory: 2847,
-  lowStockCount: 12,
-  outOfStockCount: 3,
-  todayReservations: 18,
-  pendingReservations: 5,
-  confirmedReservations: 13,
-  todayRevenue: 14280,
-  monthlyRevenue: 342800,
-  courierRequests: 7,
-  recentReservations: [
-    { id: 1, medicineName: "Metformin 500mg", pharmacyName: "", pharmacyId: 2, medicineId: 3, quantity: 2, price: 42, totalAmount: 84, status: "pending", deliveryType: "pickup", expiresAt: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(), prescriptionId: null, qrCode: null, notes: null, createdAt: new Date(Date.now() - 30 * 60 * 1000).toISOString() },
-    { id: 2, medicineName: "Atorvastatin 20mg", pharmacyName: "", pharmacyId: 2, medicineId: 4, quantity: 1, price: 85, totalAmount: 85, status: "pending", deliveryType: "courier", expiresAt: new Date(Date.now() + 1.5 * 60 * 60 * 1000).toISOString(), prescriptionId: null, qrCode: null, notes: null, createdAt: new Date(Date.now() - 45 * 60 * 1000).toISOString() },
-    { id: 3, medicineName: "Amoxicillin 500mg", pharmacyName: "", pharmacyId: 2, medicineId: 1, quantity: 3, price: 98.5, totalAmount: 295.5, status: "confirmed", deliveryType: "pickup", expiresAt: new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString(), prescriptionId: null, qrCode: null, notes: null, createdAt: new Date(Date.now() - 60 * 60 * 1000).toISOString() },
-  ],
-  topSellingMedicines: [
-    { medicineId: 2, medicineName: "Paracetamol 650mg", category: "Analgesics", count: 184, revenue: 4416, trend: "up", percentChange: 12.4 },
-    { medicineId: 3, medicineName: "Metformin 500mg", category: "Antidiabetics", count: 142, revenue: 5964, trend: "up", percentChange: 8.7 },
-    { medicineId: 6, medicineName: "Azithromycin 500mg", category: "Antibiotics", count: 98, revenue: 6664, trend: "stable", percentChange: 0.2 },
-    { medicineId: 7, medicineName: "Cetirizine 10mg", category: "Antihistamines", count: 87, revenue: 1609.5, trend: "down", percentChange: -3.1 },
-  ],
-  revenueByDay: Array.from({ length: 14 }, (_, i) => ({
-    date: new Date(Date.now() - (13 - i) * 24 * 60 * 60 * 1000).toLocaleDateString("en-IN", { month: "short", day: "numeric" }),
-    revenue: 8000 + Math.floor(Math.random() * 12000),
-    orders: 12 + Math.floor(Math.random() * 18),
-  })),
-};
+import { useGetMyProfile } from "@workspace/api-client-react";
 
 export default function PharmacyDashboard() {
+  const { data: profile } = useGetMyProfile();
   const { data, isLoading } = useGetPharmacyDashboard();
-  const dashboard = (data as any) || mockDashboard;
+  const dashboard = (data as any) || {
+    totalInventory: 0,
+    lowStockCount: 0,
+    outOfStockCount: 0,
+    todayReservations: 0,
+    pendingReservations: 0,
+    confirmedReservations: 0,
+    todayRevenue: 0,
+    monthlyRevenue: 0,
+    courierRequests: 0,
+    recentReservations: [],
+    topSellingMedicines: [],
+    revenueByDay: [],
+  };
   const updateReservation = useUpdateReservation();
 
   const handleReservation = async (id: number, action: "confirmed" | "cancelled") => {
@@ -57,7 +43,7 @@ export default function PharmacyDashboard() {
 
   return (
     <PharmacyLayout>
-      <TopBar title={`Good day, ${samplePharmacyUser.name.split(" ")[0]}`} subtitle="Apollo Pharmacy, Bandra" userName={samplePharmacyUser.name} />
+      <TopBar title={`Good day, ${(profile as any)?.name?.split(" ")[0] || "Pharmacy"}`} subtitle="Live pharmacy dashboard" userName={(profile as any)?.name || "Pharmacy"} />
 
       <div className="p-6 space-y-6 max-w-6xl">
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">

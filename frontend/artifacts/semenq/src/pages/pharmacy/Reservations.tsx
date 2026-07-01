@@ -6,16 +6,7 @@ import { CheckCircle2, XCircle, Clock, Truck, MapPin, QrCode } from "lucide-reac
 import { Button } from "@/components/ui/button";
 import { useListReservations, useUpdateReservation } from "@workspace/api-client-react";
 import { toast } from "sonner";
-import { samplePharmacyUser } from "@/lib/mockData";
 import { QRCode } from "@/components/QRCode";
-
-const mockReservations = [
-  { id: 1, medicineName: "Metformin 500mg", pharmacyName: "Apollo Pharmacy, Bandra", pharmacyId: 2, medicineId: 3, quantity: 2, price: "42.00", totalAmount: "84.00", status: "pending", deliveryType: "pickup", expiresAt: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(), prescriptionId: null, qrCode: "SEMENQ:RES:001:3:2", notes: "Patient: Arjun Mehta", createdAt: new Date(Date.now() - 30 * 60 * 1000).toISOString() },
-  { id: 2, medicineName: "Atorvastatin 20mg", pharmacyName: "Apollo Pharmacy, Bandra", pharmacyId: 2, medicineId: 4, quantity: 1, price: "85.00", totalAmount: "85.00", status: "pending", deliveryType: "courier", expiresAt: new Date(Date.now() + 1.5 * 60 * 60 * 1000).toISOString(), prescriptionId: 1, qrCode: null, notes: null, createdAt: new Date(Date.now() - 45 * 60 * 1000).toISOString() },
-  { id: 3, medicineName: "Amoxicillin 500mg", pharmacyName: "Apollo Pharmacy, Bandra", pharmacyId: 2, medicineId: 1, quantity: 3, price: "98.50", totalAmount: "295.50", status: "confirmed", deliveryType: "pickup", expiresAt: new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString(), prescriptionId: null, qrCode: "SEMENQ:RES:003:1:2", notes: null, createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString() },
-  { id: 4, medicineName: "Cetirizine 10mg", pharmacyName: "Apollo Pharmacy, Bandra", pharmacyId: 2, medicineId: 7, quantity: 5, price: "18.50", totalAmount: "92.50", status: "ready", deliveryType: "pickup", expiresAt: new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString(), prescriptionId: null, qrCode: "SEMENQ:RES:004:7:2", notes: null, createdAt: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString() },
-  { id: 5, medicineName: "Pantoprazole 40mg", pharmacyName: "Apollo Pharmacy, Bandra", pharmacyId: 2, medicineId: 5, quantity: 2, price: "62.50", totalAmount: "125.00", status: "cancelled", deliveryType: "pickup", expiresAt: new Date(Date.now() - 1 * 60 * 60 * 1000).toISOString(), prescriptionId: null, qrCode: null, notes: null, createdAt: new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString() },
-];
 
 const statusColors: Record<string, string> = {
   pending: "bg-warning/10 text-warning border-warning/20",
@@ -31,7 +22,7 @@ export default function PharmacyReservations() {
   const [activeTab, setActiveTab] = useState("All");
   const [showQR, setShowQR] = useState<number | null>(null);
   const { data, isLoading, refetch } = useListReservations({ pharmacyId: 2 });
-  const reservations = (Array.isArray(data) && data.length > 0 ? data : mockReservations) as typeof mockReservations;
+  const reservations = (Array.isArray(data) ? data : []) as any[];
   const updateReservation = useUpdateReservation();
 
   const handleAction = async (id: number, status: "confirmed" | "cancelled" | "ready") => {
@@ -52,7 +43,7 @@ export default function PharmacyReservations() {
 
   return (
     <PharmacyLayout>
-      <TopBar title="Reservations" subtitle={pendingCount > 0 ? `${pendingCount} pending approval` : undefined} userName={samplePharmacyUser.name} />
+      <TopBar title="Reservations" subtitle={pendingCount > 0 ? `${pendingCount} pending approval` : undefined} userName="Pharmacy" />
 
       <div className="p-6 max-w-4xl space-y-4">
         <div className="flex gap-2 p-1 bg-muted rounded-xl w-fit">

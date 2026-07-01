@@ -7,7 +7,6 @@ import { Input } from "@/components/ui/input";
 import { StockBadge } from "@/components/StockBadge";
 import { Link } from "wouter";
 import { useSearchMedicines, useGetSearchSuggestions } from "@workspace/api-client-react";
-import { medicines, pharmacies } from "@/lib/mockData";
 
 const expansionLevels = ["nearby", "city", "district", "state", "national"] as const;
 const expansionLabels: Record<string, string> = {
@@ -21,22 +20,7 @@ const sortOptions = [
   { value: "fastest", label: "Fastest Delivery" },
 ];
 
-const mockResults = [
-  { medicine: medicines[2], pharmacy: pharmacies[1], price: 42, quantity: 48, distance: 1.2, distanceUnit: "km", estimatedDelivery: "20 min", deliveryType: "pickup", stockStatus: "available", matchScore: 0.98 },
-  { medicine: medicines[2], pharmacy: pharmacies[0], price: 44, quantity: 12, distance: 2.8, distanceUnit: "km", estimatedDelivery: "35 min", deliveryType: "pickup", stockStatus: "limited", matchScore: 0.95 },
-  { medicine: medicines[2], pharmacy: pharmacies[3], price: 38, quantity: 60, distance: 145, distanceUnit: "km", estimatedDelivery: "Tomorrow", deliveryType: "courier", stockStatus: "available", matchScore: 0.87 },
-  { medicine: medicines[2], pharmacy: pharmacies[4], price: 40, quantity: 200, distance: 1285, distanceUnit: "km", estimatedDelivery: "2-3 days", deliveryType: "courier", stockStatus: "available", matchScore: 0.82 },
-];
-
-const mockMapMarkers = [
-  { pharmacyId: 2, pharmacyName: "Apollo Pharmacy, Bandra", lat: 19.0596, lng: 72.8347, stockStatus: "available", price: 42, quantity: 48 },
-  { pharmacyId: 1, pharmacyName: "MedPlus, Andheri West", lat: 19.1334, lng: 72.8263, stockStatus: "limited", price: 44, quantity: 12 },
-  { pharmacyId: 3, pharmacyName: "Jan Aushadhi, Dadar", lat: 19.0178, lng: 72.8478, stockStatus: "outOfStock", price: 0, quantity: 0 },
-];
-
-const suggestions = ["Metformin 500mg", "Metformin HCl", "Amoxicillin 500mg", "Atorvastatin 20mg", "Pantoprazole 40mg"];
-
-function MapPlaceholder({ markers }: { markers: typeof mockMapMarkers }) {
+function MapPlaceholder({ markers }: { markers: any[] }) {
   const statusColors: Record<string, string> = { available: "#10B981", limited: "#F59E0B", outOfStock: "#EF4444", courier: "#7C3AED" };
   return (
     <div className="relative w-full h-full bg-[#e8f0fe] rounded-2xl overflow-hidden">
@@ -104,7 +88,10 @@ export default function MedicineSearch() {
   const inputRef = useRef<HTMLInputElement>(null);
 
   const { data: results, isLoading } = useSearchMedicines({ q: searched || "", sortBy: sort as any }, { query: { enabled: !!searched, queryKey: ["searchMedicines", searched, sort] } });
-  const displayResults = (results as any)?.results || (searched ? mockResults : []);
+  const displayResults = (results as any)?.results || [];
+  const { data: suggestionData } = useGetSearchSuggestions({ q: query }, { query: { enabled: query.length > 1, queryKey: ["searchSuggestions", query] } });
+  const suggestions = (Array.isArray(suggestionData) ? suggestionData : []) as any[];
+  const markers = (results as any)?.mapMarkers || [];
 
   const doSearch = async (q: string) => {
     if (!q.trim()) return;
@@ -146,10 +133,10 @@ export default function MedicineSearch() {
                         exit={{ opacity: 0, y: -4 }}
                         className="absolute top-full left-0 right-0 mt-2 bg-white rounded-2xl shadow-2xl border border-border z-50 overflow-hidden"
                       >
-                        {suggestions.filter(s => s.toLowerCase().includes(query.toLowerCase())).map(s => (
-                          <button key={s} className="w-full flex items-center gap-3 px-4 py-3 text-sm hover:bg-muted/40 text-left" onClick={() => { setQuery(s); doSearch(s); }}>
+                        {suggestions.map((s: any) => (
+                          <button key={s.text || s} className="w-full flex items-center gap-3 px-4 py-3 text-sm hover:bg-muted/40 text-left" onClick={() => { const text = s.text || s; setQuery(text); doSearch(text); }}>
                             <Search className="w-4 h-4 text-muted-foreground shrink-0" />
-                            <span>{s}</span>
+                            <span>{s.text || s}</span>
                           </button>
                         ))}
                       </motion.div>
@@ -191,7 +178,7 @@ export default function MedicineSearch() {
               </div>
 
               <div className="p-3 space-y-3">
-                {displayResults.map((r: typeof mockResults[0], i: number) => (
+                {displayResults.map((r: any, i: number) => (
                   <motion.div key={i} initial={{ opacity: 0, x: -16 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.06 }} className="bg-card border border-card-border rounded-[20px] p-4 card-lift">
                     <div className="flex items-start gap-3">
                       <img src={r.medicine.imageUrl} alt={r.medicine.name} className="w-12 h-12 rounded-xl object-cover bg-muted shrink-0" onError={e => { e.currentTarget.src = ""; e.currentTarget.className = "w-12 h-12 rounded-xl bg-muted shrink-0"; }} />
@@ -232,7 +219,7 @@ export default function MedicineSearch() {
             </div>
 
             <div className="flex-1 p-4">
-              <MapPlaceholder markers={mockMapMarkers} />
+              <MapPlaceholder markers={markers} />
             </div>
           </div>
         ) : (

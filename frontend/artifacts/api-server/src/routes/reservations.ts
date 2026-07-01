@@ -35,10 +35,10 @@ router.get("/reservations", async (req, res) => {
     let filtered = list;
     if (status) filtered = filtered.filter(r => r.status === status);
     if (pharmacyId) filtered = filtered.filter(r => r.pharmacyId === Number(pharmacyId));
-    res.json(filtered);
+    return res.json(filtered);
   } catch (e) {
     req.log.error(e);
-    res.status(500).json({ error: "Failed to fetch reservations" });
+    return res.status(500).json({ error: "Failed to fetch reservations" });
   }
 });
 
@@ -46,10 +46,10 @@ router.get("/reservations/:id", async (req, res) => {
   try {
     const [r] = await db.select().from(reservationsTable).where(eq(reservationsTable.id, Number(req.params.id)));
     if (!r) return res.status(404).json({ error: "Reservation not found" });
-    res.json(r);
+    return res.json(r);
   } catch (e) {
     req.log.error(e);
-    res.status(500).json({ error: "Failed to fetch reservation" });
+    return res.status(500).json({ error: "Failed to fetch reservation" });
   }
 });
 
@@ -75,10 +75,10 @@ router.post("/reservations", async (req, res) => {
       prescriptionId: prescriptionId ? Number(prescriptionId) : undefined,
       notes,
     }).returning();
-    res.status(201).json(reservation);
+    return res.status(201).json(reservation);
   } catch (e) {
     req.log.error(e);
-    res.status(500).json({ error: "Failed to create reservation" });
+    return res.status(500).json({ error: "Failed to create reservation" });
   }
 });
 
@@ -87,10 +87,10 @@ router.patch("/reservations/:id", async (req, res) => {
     const { status, notes } = req.body;
     const [updated] = await db.update(reservationsTable).set({ status: status ?? undefined, notes: notes ?? undefined, updatedAt: new Date() }).where(eq(reservationsTable.id, Number(req.params.id))).returning();
     if (!updated) return res.status(404).json({ error: "Reservation not found" });
-    res.json(updated);
+    return res.json(updated);
   } catch (e) {
     req.log.error(e);
-    res.status(500).json({ error: "Failed to update reservation" });
+    return res.status(500).json({ error: "Failed to update reservation" });
   }
 });
 

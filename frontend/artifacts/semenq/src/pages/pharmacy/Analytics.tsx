@@ -2,36 +2,25 @@ import { PharmacyLayout } from "@/layouts/PharmacyLayout";
 import { TopBar } from "@/components/TopBar";
 import { useGetPharmacyDashboard, useGetTopMedicines } from "@workspace/api-client-react";
 import { AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
-import { samplePharmacyUser } from "@/lib/mockData";
-
-const revenueData = Array.from({ length: 30 }, (_, i) => ({
-  date: new Date(Date.now() - (29 - i) * 24 * 60 * 60 * 1000).toLocaleDateString("en-IN", { month: "short", day: "numeric" }),
-  revenue: 7000 + Math.floor(Math.random() * 14000),
-  orders: 10 + Math.floor(Math.random() * 20),
-}));
-
-const categoryData = [
-  { name: "Antibiotics", value: 28 }, { name: "Analgesics", value: 22 }, { name: "Antidiabetics", value: 18 },
-  { name: "Antihistamines", value: 14 }, { name: "Statins", value: 10 }, { name: "Others", value: 8 },
-];
+import { useGetMyProfile } from "@workspace/api-client-react";
 
 const COLORS = ["#2563EB", "#10B981", "#7C3AED", "#F59E0B", "#EF4444", "#64748B"];
 
-const topMedicines = [
-  { name: "Paracetamol 650mg", units: 184, revenue: 4416 },
-  { name: "Metformin 500mg", units: 142, revenue: 5964 },
-  { name: "Azithromycin 500mg", units: 98, revenue: 6664 },
-  { name: "Cetirizine 10mg", units: 87, revenue: 1609 },
-  { name: "Amoxicillin 500mg", units: 73, revenue: 7190 },
-];
-
 export default function PharmacyAnalytics() {
+  const { data: profile } = useGetMyProfile();
   const { data: dashboard } = useGetPharmacyDashboard();
   const { data: topData } = useGetTopMedicines({ limit: 5 });
+  const revenueData = (dashboard as any)?.revenueByDay ?? [];
+  const topMedicines = (Array.isArray(topData) ? topData : []) as any[];
+  const categoryData = Object.entries((Array.isArray(topData) ? topData : []).reduce<Record<string, number>>((acc, item: any) => {
+    const key = item.category || "Others";
+    acc[key] = (acc[key] || 0) + 1;
+    return acc;
+  }, {})).map(([name, value]) => ({ name, value }));
 
   return (
     <PharmacyLayout>
-      <TopBar title="Analytics" subtitle="Last 30 days" userName={samplePharmacyUser.name} />
+      <TopBar title="Analytics" subtitle="Last 30 days" userName={(profile as any)?.name || "Pharmacy"} />
 
       <div className="p-6 max-w-6xl space-y-6">
         <div className="grid grid-cols-4 gap-4">
@@ -89,11 +78,11 @@ export default function PharmacyAnalytics() {
                 </PieChart>
               </ResponsiveContainer>
               <div className="flex-1 space-y-2">
-                {categoryData.map((cat, i) => (
-                  <div key={cat.name} className="flex items-center gap-2">
-                    <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: COLORS[i] }} />
-                    <span className="text-xs text-foreground flex-1">{cat.name}</span>
-                    <span className="text-xs font-semibold text-foreground">{cat.value}%</span>
+                {categoryData.map(({ name, value }, i) => (
+                  <div key={name} className="flex items-center gap-2">
+                    <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: COLORS[i % COLORS.length] }} />
+                    <span className="text-xs text-foreground flex-1">{name}</span>
+                    <span className="text-xs font-semibold text-foreground">{value}</span>
                   </div>
                 ))}
               </div>

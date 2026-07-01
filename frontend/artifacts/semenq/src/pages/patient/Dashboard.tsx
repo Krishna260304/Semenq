@@ -10,7 +10,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useGetPatientDashboard } from "@workspace/api-client-react";
-import { sampleUser } from "@/lib/mockData";
+import { useGetMyProfile } from "@workspace/api-client-react";
 
 const quickActions = [
   { href: "/patient/search", icon: Search, label: "Find Medicines", desc: "Search across India", color: "bg-primary text-white" },
@@ -29,27 +29,6 @@ const statuses: Record<string, { label: string; color: string }> = {
   placed: { label: "Placed", color: "text-primary bg-primary/10 border-primary/20" },
   shipped: { label: "Shipped", color: "text-ai bg-ai/10 border-ai/20" },
   delivered: { label: "Delivered", color: "text-success bg-success/10 border-success/20" },
-};
-
-const mockDashboard = {
-  pendingReservations: 2,
-  activeOrders: 1,
-  totalOrders: 14,
-  upcomingReservations: [
-    { id: 1, medicineName: "Metformin 500mg", pharmacyName: "Apollo Pharmacy, Bandra", quantity: 2, totalAmount: 84, status: "confirmed", deliveryType: "pickup", expiresAt: new Date(Date.now() + 3 * 60 * 60 * 1000).toISOString(), medicineId: 3, pharmacyId: 2, prescriptionId: null, qrCode: null, notes: null, price: 42, createdAt: new Date().toISOString() },
-    { id: 2, medicineName: "Atorvastatin 20mg", pharmacyName: "MedPlus, Andheri West", quantity: 1, totalAmount: 85, status: "pending", deliveryType: "pickup", expiresAt: new Date(Date.now() + 1.5 * 60 * 60 * 1000).toISOString(), medicineId: 4, pharmacyId: 1, prescriptionId: null, qrCode: null, notes: null, price: 85, createdAt: new Date().toISOString() },
-  ],
-  recentOrders: [
-    { id: 3, medicineName: "Amoxicillin 500mg", pharmacyName: "Netmeds Point, Bengaluru", status: "shipped", totalAmount: 197, paymentMethod: "UPI", deliveryType: "courier", estimatedDelivery: "Tomorrow by 7 PM", reservationId: 3, paymentStatus: "paid", deliveryAddress: "402, Shree Sai Apartments, Andheri West", trackingId: "NM20260628A1", createdAt: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(), updatedAt: new Date().toISOString() },
-  ],
-  recentPrescriptions: [
-    { id: 1, doctorName: "Dr. Ananya Sharma", hospitalName: "Apollo Hospitals", uploadedAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(), status: "parsed", overallConfidence: 94.2, medicines: [], patientName: "Arjun Mehta", imageUrl: null, notes: null },
-  ],
-  aiRecommendations: [
-    { id: 1, type: "refill" as const, title: "Time to refill Metformin", description: "Based on your last prescription, you're likely running low on Metformin 500mg. Reserve now to avoid missing a dose.", medicineName: "Metformin 500mg", medicineId: 3, actionLabel: "Reserve Now" },
-    { id: 2, type: "saving" as const, title: "Save 22% on Atorvastatin", description: "Jan Aushadhi Kendra in Dadar has Atorvastatin 20mg at ₹68 vs ₹85 at your usual pharmacy. Same composition.", medicineName: "Atorvastatin 20mg", medicineId: 4, actionLabel: "View Deal" },
-    { id: 3, type: "alert" as const, title: "Expiring reservation", description: "Your Atorvastatin reservation at MedPlus expires in 1.5 hours. Complete payment or it will be released.", medicineName: "Atorvastatin 20mg", medicineId: 4, actionLabel: "Pay Now" },
-  ],
 };
 
 const aiColors = { refill: "border-ai/20 bg-ai/5", saving: "border-success/20 bg-success/5", alert: "border-warning/20 bg-warning/5", alternative: "border-primary/20 bg-primary/5" };
@@ -77,12 +56,21 @@ function ExpiresIn({ dateStr }: { dateStr: string }) {
 }
 
 export default function PatientDashboard() {
+  const { data: profile } = useGetMyProfile();
   const { data, isLoading } = useGetPatientDashboard();
-  const dashboard = (data as any) || mockDashboard;
+  const dashboard = (data as any) || {
+    pendingReservations: 0,
+    activeOrders: 0,
+    totalOrders: 0,
+    upcomingReservations: [],
+    recentOrders: [],
+    recentPrescriptions: [],
+    aiRecommendations: [],
+  };
 
   return (
     <PatientLayout>
-      <TopBar title={`${greeting}, ${sampleUser.name.split(" ")[0]}`} subtitle={new Date().toLocaleDateString("en-IN", { weekday: "long", year: "numeric", month: "long", day: "numeric" })} userName={sampleUser.name} />
+      <TopBar title={`${greeting}, ${(profile as any)?.name?.split(" ")[0] || "Guest"}`} subtitle={new Date().toLocaleDateString("en-IN", { weekday: "long", year: "numeric", month: "long", day: "numeric" })} userName={(profile as any)?.name || "Guest"} />
 
       <div className="p-6 space-y-6 max-w-6xl">
         <div className="grid grid-cols-3 gap-4">

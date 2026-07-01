@@ -6,30 +6,6 @@ import { useGetAdminDashboard } from "@workspace/api-client-react";
 import { SkeletonStats } from "@/components/SkeletonCard";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 
-const mockAdmin = {
-  totalUsers: 24187,
-  totalPharmacies: 18432,
-  totalMedicines: 9847,
-  totalOrders: 142893,
-  monthlyRevenue: 8720000,
-  activeReservations: 2341,
-  pendingVerifications: 23,
-  platformHealth: { serverStatus: "healthy", dbStatus: "healthy", apiStatus: "healthy", apiResponseTime: 142, uptime: 99.97, errorRate: 0.02 },
-  recentActivity: [
-    { id: 1, type: "userRegistered", description: "New patient registered: Kavita Mishra from Delhi", timestamp: new Date(Date.now() - 5 * 60 * 1000).toISOString(), metadata: "" },
-    { id: 2, type: "pharmacyVerified", description: "PharmEasy Outlet Bangalore verified and activated", timestamp: new Date(Date.now() - 18 * 60 * 1000).toISOString(), metadata: "" },
-    { id: 3, type: "paymentReceived", description: "Courier payment ₹846 received from Rajan Mehta, Pune", timestamp: new Date(Date.now() - 42 * 60 * 1000).toISOString(), metadata: "" },
-    { id: 4, type: "orderPlaced", description: "Cross-state courier order placed: Mumbai → Bengaluru (Amoxicillin)", timestamp: new Date(Date.now() - 1.2 * 60 * 60 * 1000).toISOString(), metadata: "" },
-    { id: 5, type: "alert", description: "High demand spike for Cetirizine detected across Mumbai region", timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(), metadata: "" },
-    { id: 6, type: "pharmacyVerified", description: "Apollo Pharmacy Hyderabad license approved", timestamp: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString(), metadata: "" },
-  ],
-  userGrowth: Array.from({ length: 12 }, (_, i) => ({
-    date: new Date(2025, i, 1).toLocaleDateString("en-IN", { month: "short" }),
-    revenue: 100000 + i * 65000 + Math.floor(Math.random() * 40000),
-    orders: 1200 + i * 800 + Math.floor(Math.random() * 400),
-  })),
-};
-
 const activityIcons: Record<string, any> = {
   userRegistered: Users,
   pharmacyVerified: Building2,
@@ -64,7 +40,18 @@ function TimeAgo({ dateStr }: { dateStr: string }) {
 
 export default function AdminDashboard() {
   const { data, isLoading } = useGetAdminDashboard();
-  const d = (data as any) || mockAdmin;
+  const d = (data as any) || {
+    totalUsers: 0,
+    totalPharmacies: 0,
+    totalMedicines: 0,
+    totalOrders: 0,
+    monthlyRevenue: 0,
+    activeReservations: 0,
+    pendingVerifications: 0,
+    platformHealth: { serverStatus: "degraded", dbStatus: "degraded", apiStatus: "degraded", apiResponseTime: 0, uptime: 0, errorRate: 0 },
+    recentActivity: [],
+    userGrowth: [],
+  };
 
   const stats = [
     { label: "Total Users", value: d.totalUsers.toLocaleString("en-IN"), icon: Users, color: "text-primary", bg: "bg-primary/10" },

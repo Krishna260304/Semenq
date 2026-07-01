@@ -38,10 +38,10 @@ router.get("/search/medicines", async (req, res) => {
       }
     }
 
-    res.json({ results: results.slice(0, 20), total: results.length, searchRadius: "city" });
+    return res.json({ results: results.slice(0, 20), total: results.length, searchRadius: "city" });
   } catch (e) {
     req.log.error(e);
-    res.status(500).json({ error: "Search failed" });
+    return res.status(500).json({ error: "Search failed" });
   }
 });
 
@@ -54,10 +54,10 @@ router.get("/search/suggestions", async (req, res) => {
       .filter(m => m.name.toLowerCase().includes(q.toLowerCase()) || m.genericName.toLowerCase().includes(q.toLowerCase()))
       .map(m => m.name)
       .slice(0, 8);
-    res.json(suggestions);
+    return res.json(suggestions);
   } catch (e) {
     req.log.error(e);
-    res.status(500).json({ error: "Suggestions failed" });
+    return res.status(500).json({ error: "Suggestions failed" });
   }
 });
 

@@ -6,16 +6,11 @@ import { Upload, FileImage, X, Zap, CheckCircle2, AlertTriangle, Search, Edit3 }
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
 import { toast } from "sonner";
-import { sampleUser } from "@/lib/mockData";
+import { useGetMyProfile } from "@workspace/api-client-react";
 
 type ScanStatus = "idle" | "uploading" | "scanning" | "done";
 
-const parsedMedicines = [
-  { name: "Metformin 500mg", dosage: "500mg", frequency: "Twice daily", duration: "3 months", confidence: 97, status: "confirmed" as const },
-  { name: "Atorvastatin 20mg", dosage: "20mg", frequency: "Once daily (night)", duration: "3 months", confidence: 92, status: "confirmed" as const },
-  { name: "Pantoprazole 40mg", dosage: "40mg", frequency: "Once daily (morning)", duration: "1 month", confidence: 88, status: "confirmed" as const },
-  { name: "Aspirin 75mg", dosage: "75mg", frequency: "Once daily", duration: "Ongoing", confidence: 61, status: "lowConfidence" as const },
-];
+const parsedMedicines: any[] = [];
 
 const scanSteps = [
   "Preprocessing image...",
@@ -27,6 +22,7 @@ const scanSteps = [
 ];
 
 export default function PrescriptionUpload() {
+  const { data: profile } = useGetMyProfile();
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [scanStatus, setScanStatus] = useState<ScanStatus>("idle");
@@ -66,7 +62,7 @@ export default function PrescriptionUpload() {
 
   return (
     <PatientLayout>
-      <TopBar title="Upload Prescription" subtitle="AI will extract your medicines automatically" userName={sampleUser.name} />
+      <TopBar title="Upload Prescription" subtitle="AI will extract your medicines automatically" userName={(profile as any)?.name || "Guest"} />
 
       <div className="p-6 max-w-6xl">
         <div className="grid lg:grid-cols-2 gap-6">
@@ -147,8 +143,8 @@ export default function PrescriptionUpload() {
             )}
 
             {!file && (
-              <button onClick={() => { const mockFile = new File([""], "prescription.jpg", { type: "image/jpeg" }); handleFile(mockFile); }} className="w-full py-3 text-sm text-primary font-medium hover:underline">
-                Try with a sample prescription
+              <button onClick={() => toast.info("Upload a prescription image to begin parsing")} className="w-full py-3 text-sm text-primary font-medium hover:underline">
+                Try the upload flow
               </button>
             )}
           </div>

@@ -5,7 +5,7 @@ import path from "path";
 
 const DEFAULT_PORT = 5173;
 const DEFAULT_BASE_PATH = "/";
-const DEFAULT_API_ORIGIN = "http://127.0.0.1:3000";
+const DEFAULT_API_ORIGIN = "http://127.0.0.1:8000";
 
 function resolvePort(rawPort: string | undefined, fallback: number): number {
   if (!rawPort) {

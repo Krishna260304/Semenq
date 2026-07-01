@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { useGetMyProfile, useUpdateMyProfile } from "@workspace/api-client-react";
-import { sampleUser } from "@/lib/mockData";
+import { useEffect } from "react";
 
 const sections = [
   { id: "personal", icon: User, label: "Personal Information" },
@@ -20,9 +20,22 @@ const sections = [
 export default function Profile() {
   const [activeSection, setActiveSection] = useState("personal");
   const [editing, setEditing] = useState(false);
-  const [form, setForm] = useState({ name: sampleUser.name, email: sampleUser.email, phone: sampleUser.phone, city: sampleUser.city, state: sampleUser.state, pincode: sampleUser.pincode, address: sampleUser.address });
   const { data: profile } = useGetMyProfile();
   const updateMutation = useUpdateMyProfile();
+  const [form, setForm] = useState({ name: "", email: "", phone: "", city: "", state: "", pincode: "", address: "" });
+
+  useEffect(() => {
+    if (!profile) return;
+    setForm({
+      name: (profile as any).name || "",
+      email: (profile as any).email || "",
+      phone: (profile as any).phone || "",
+      city: (profile as any).city || "",
+      state: (profile as any).state || "",
+      pincode: (profile as any).pincode || "",
+      address: (profile as any).address || "",
+    });
+  }, [profile]);
 
   const save = () => {
     updateMutation.mutate({ data: { name: form.name, phone: form.phone, city: form.city, state: form.state, pincode: form.pincode, address: form.address } });
@@ -32,17 +45,17 @@ export default function Profile() {
 
   return (
     <PatientLayout>
-      <TopBar title="Profile Settings" userName={sampleUser.name} />
+      <TopBar title="Profile Settings" userName={(profile as any)?.name || "Guest"} />
 
       <div className="p-6 max-w-5xl">
         <div className="grid lg:grid-cols-[260px_1fr] gap-6">
           <div className="space-y-1">
             <div className="bg-card border border-card-border rounded-[24px] p-5 text-center mb-4">
               <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-3">
-                <span className="text-3xl font-bold text-primary">{sampleUser.name[0]}</span>
+                <span className="text-3xl font-bold text-primary">{((profile as any)?.name || "G")[0]}</span>
               </div>
-              <p className="font-semibold text-foreground">{sampleUser.name}</p>
-              <p className="text-sm text-muted-foreground">{sampleUser.email}</p>
+              <p className="font-semibold text-foreground">{(profile as any)?.name || "Guest"}</p>
+              <p className="text-sm text-muted-foreground">{(profile as any)?.email || ""}</p>
               <span className="inline-block mt-2 px-2.5 py-0.5 rounded-full bg-success/10 text-success text-xs font-medium">Verified Patient</span>
             </div>
 

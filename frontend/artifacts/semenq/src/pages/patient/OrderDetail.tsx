@@ -6,37 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Link, useParams } from "wouter";
 import { useGetOrder, useGetOrderTracking } from "@workspace/api-client-react";
 import { QRCode } from "@/components/QRCode";
-import { sampleUser } from "@/lib/mockData";
-
-const mockOrder = {
-  id: 1,
-  medicineName: "Metformin 500mg",
-  pharmacyName: "Apollo Pharmacy, Bandra",
-  status: "shipped",
-  deliveryType: "courier",
-  totalAmount: "84.00",
-  paymentMethod: "upi",
-  paymentStatus: "paid",
-  deliveryAddress: "402, Shree Sai Apartments, Andheri West, Mumbai - 400053",
-  trackingId: "SQ20260629A1",
-  estimatedDelivery: "Tomorrow by 7 PM",
-  reservationId: 1,
-  createdAt: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
-  updatedAt: new Date().toISOString(),
-};
-
-const mockTracking = {
-  orderId: 1,
-  currentStatus: "shipped",
-  estimatedDelivery: "Tomorrow by 7 PM",
-  timeline: [
-    { stage: "placed", label: "Order Placed", description: "Your order was placed and payment confirmed", timestamp: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(), completed: true },
-    { stage: "processing", label: "Processing", description: "Pharmacy is preparing your order", timestamp: new Date(Date.now() - 22 * 60 * 60 * 1000).toISOString(), completed: true },
-    { stage: "packed", label: "Packed & Ready", description: "Your medicines are packed and sealed", timestamp: new Date(Date.now() - 18 * 60 * 60 * 1000).toISOString(), completed: true },
-    { stage: "shipped", label: "Out for Delivery", description: "Order dispatched via BlueDart courier", timestamp: new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString(), completed: true },
-    { stage: "delivered", label: "Delivered", description: "Package delivered to your doorstep", timestamp: null, completed: false },
-  ],
-};
+import { useGetMyProfile } from "@workspace/api-client-react";
 
 const statusConfig: Record<string, { label: string; color: string }> = {
   placed: { label: "Order Placed", color: "bg-primary/10 text-primary border-primary/20" },
@@ -49,17 +19,27 @@ const statusConfig: Record<string, { label: string; color: string }> = {
 
 export default function OrderDetail() {
   const { id } = useParams<{ id: string }>();
+  const { data: profile } = useGetMyProfile();
   const { data: order } = useGetOrder(Number(id));
   const { data: tracking } = useGetOrderTracking(Number(id));
 
-  const o = (order as any) || mockOrder;
-  const t = (tracking as any) || mockTracking;
+  const o = order as any;
+  const t = (tracking as any) || { timeline: [], estimatedDelivery: o?.estimatedDelivery || "—" };
+
+  if (!o) {
+    return (
+      <PatientLayout>
+        <TopBar title="Order Details" userName={(profile as any)?.name || "Guest"} />
+        <div className="p-6 max-w-4xl text-sm text-muted-foreground">Loading live order data...</div>
+      </PatientLayout>
+    );
+  }
   const st = statusConfig[o.status] || statusConfig.placed;
   const qrValue = `SEMENQ:ORDER:${o.id}:${o.trackingId || "PICKUP"}:${o.reservationId}`;
 
   return (
     <PatientLayout>
-      <TopBar title="Order Details" userName={sampleUser.name} />
+      <TopBar title="Order Details" userName={(profile as any)?.name || "Guest"} />
 
       <div className="p-6 max-w-4xl">
         <Link href="/patient/orders">
@@ -142,7 +122,7 @@ export default function OrderDetail() {
           <div className="bg-card border border-card-border rounded-[24px] p-6">
             <h3 className="font-semibold text-foreground mb-5">Order Timeline</h3>
             <div className="relative">
-              {t.timeline?.map((event: typeof mockTracking.timeline[0], i: number) => (
+              {t.timeline?.map((event: any, i: number) => (
                 <motion.div key={event.stage} initial={{ opacity: 0, x: 16 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.1 }} className="flex gap-4 relative">
                   {i < t.timeline.length - 1 && (
                     <div className={`absolute left-4 top-8 bottom-0 w-0.5 ${event.completed && t.timeline[i + 1]?.completed ? "bg-success" : "bg-border"}`} />

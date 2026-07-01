@@ -12,10 +12,10 @@ router.get("/medicines", async (req, res) => {
     if (query) medicines = medicines.filter(m => m.name.toLowerCase().includes(query.toLowerCase()) || m.genericName.toLowerCase().includes(query.toLowerCase()));
     if (category) medicines = medicines.filter(m => m.category === category);
     const offset = (Number(page) - 1) * Number(limit);
-    res.json({ medicines: medicines.slice(offset, offset + Number(limit)), total: medicines.length, page: Number(page) });
+    return res.json({ medicines: medicines.slice(offset, offset + Number(limit)), total: medicines.length, page: Number(page) });
   } catch (e) {
     req.log.error(e);
-    res.status(500).json({ error: "Failed to fetch medicines" });
+    return res.status(500).json({ error: "Failed to fetch medicines" });
   }
 });
 
@@ -23,10 +23,10 @@ router.get("/medicines/:id", async (req, res) => {
   try {
     const [med] = await db.select().from(medicinesTable).where(eq(medicinesTable.id, Number(req.params.id)));
     if (!med) return res.status(404).json({ error: "Medicine not found" });
-    res.json(med);
+    return res.json(med);
   } catch (e) {
     req.log.error(e);
-    res.status(500).json({ error: "Failed to fetch medicine" });
+    return res.status(500).json({ error: "Failed to fetch medicine" });
   }
 });
 
@@ -34,7 +34,7 @@ router.get("/medicines/:id/availability", async (req, res) => {
   try {
     const med = await db.select().from(medicinesTable).where(eq(medicinesTable.id, Number(req.params.id)));
     if (!med.length) return res.status(404).json({ error: "Medicine not found" });
-    res.json({
+    return res.json({
       medicineId: Number(req.params.id),
       nearbyPharmacies: 3,
       cityPharmacies: 8,
@@ -45,7 +45,7 @@ router.get("/medicines/:id/availability", async (req, res) => {
     });
   } catch (e) {
     req.log.error(e);
-    res.status(500).json({ error: "Failed to fetch availability" });
+    return res.status(500).json({ error: "Failed to fetch availability" });
   }
 });
 

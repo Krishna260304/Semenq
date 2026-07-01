@@ -5,8 +5,7 @@ import { TopBar } from "@/components/TopBar";
 import { ArrowLeft, ArrowRight, MapPin, Truck, CheckCircle2, CreditCard, Smartphone, Building2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Link, useParams, useLocation } from "wouter";
-import { useCreateReservation } from "@workspace/api-client-react";
-import { medicines, pharmacies } from "@/lib/mockData";
+import { useCreateReservation, useGetMedicine, useGetMedicineAvailability, useListPharmacies } from "@workspace/api-client-react";
 import { toast } from "sonner";
 import { QRCode } from "@/components/QRCode";
 
@@ -29,27 +28,29 @@ export default function Reserve() {
   const { medicineId } = useParams<{ medicineId: string }>();
   const [, navigate] = useLocation();
   const [step, setStep] = useState(1);
-  const [selectedPharmacy, setSelectedPharmacy] = useState<(typeof availablePharmacies)[0] | null>(null);
+  const [selectedPharmacy, setSelectedPharmacy] = useState<any | null>(null);
   const [deliveryType, setDeliveryType] = useState<"pickup" | "courier">("pickup");
   const [paymentMethod, setPaymentMethod] = useState("upi");
   const [loading, setLoading] = useState(false);
   const [reservationResult, setReservationResult] = useState<{ id: number; qrCode: string } | null>(null);
 
-  const med = medicines.find(m => m.id === Number(medicineId)) || medicines[2];
+  const { data: medicine } = useGetMedicine(Number(medicineId));
+  const { data: availability } = useGetMedicineAvailability(Number(medicineId));
+  const { data: pharmacyList } = useListPharmacies();
   const createReservation = useCreateReservation();
 
-  const availablePharmacies = [
-    { ...pharmacies[1], price: 42, quantity: 48, distance: 1.2, stockStatus: "available" as const },
-    { ...pharmacies[0], price: 44, quantity: 12, distance: 2.8, stockStatus: "limited" as const },
-    { ...pharmacies[3], price: 38, quantity: 60, distance: 145, stockStatus: "available" as const },
-  ];
+  const med = medicine as any;
+  const availablePharmacies = (availability as any)?.zones?.flatMap((zone: any) => zone.pharmacies || []) || [];
 
-  const chosenPharmacy = selectedPharmacy || availablePharmacies[0];
-  const total = chosenPharmacy.price + (deliveryType === "courier" ? 49 : 0);
+  const chosenPharmacy = selectedPharmacy || availablePharmacies[0] || (Array.isArray(pharmacyList) ? pharmacyList[0] : null);
+  const total = (chosenPharmacy?.price || 0) + (deliveryType === "courier" ? 49 : 0);
 
   const handleConfirm = async () => {
     setLoading(true);
     try {
+      if (!med || !chosenPharmacy) {
+        throw new Error("Medicine or pharmacy unavailable");
+      }
       const result = await createReservation.mutateAsync({
         data: {
           medicineId: med.id,
@@ -79,7 +80,7 @@ export default function Reserve() {
               </motion.div>
             </div>
             <h1 className="text-2xl font-bold text-foreground mb-1">Reservation Confirmed!</h1>
-            <p className="text-muted-foreground text-sm mb-6">{med.name} reserved at {chosenPharmacy.name}</p>
+            <p className="text-muted-foreground text-sm mb-6">{med?.name || "Medicine"} reserved at {chosenPharmacy?.name || "Pharmacy"}</p>
 
             <div className="bg-card border border-card-border rounded-[24px] p-6 mb-5">
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-4">
@@ -149,8 +150,8 @@ export default function Reserve() {
         <AnimatePresence mode="wait">
           {step === 1 && (
             <motion.div key="step1" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-3">
-              <h2 className="font-bold text-foreground text-lg mb-4">Available Pharmacies for {med.name}</h2>
-              {availablePharmacies.map(ph => (
+              <h2 className="font-bold text-foreground text-lg mb-4">Available Pharmacies for {med?.name || "Medicine"}</h2>
+              {availablePharmacies.map((ph: any) => (
                 <button key={ph.id} onClick={() => setSelectedPharmacy(ph)} className={`w-full p-5 rounded-[20px] border-2 text-left transition-all ${selectedPharmacy?.id === ph.id ? "border-primary bg-primary/5" : "border-border bg-card hover:border-primary/30"}`}>
                   <div className="flex items-start justify-between gap-3">
                     <div>

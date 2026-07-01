@@ -7,13 +7,12 @@ import { useState } from "react";
 import { motion } from "framer-motion";
 import { useListMedicines } from "@workspace/api-client-react";
 import { toast } from "sonner";
-import { medicines } from "@/lib/mockData";
 
 export default function AdminMedicines() {
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("all");
   const { data } = useListMedicines();
-  const list = (Array.isArray(data) ? data : medicines) as typeof medicines;
+  const list = (Array.isArray(data) ? data : []) as any[];
 
   const categories = ["all", ...Array.from(new Set(list.map(m => m.category)))];
   const filtered = list.filter(m => {

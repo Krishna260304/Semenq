@@ -73,6 +73,7 @@
   },
   "dependencies": {
     "@types/qrcode": "^1.5.6",
+    "firebase": "^12.15.0",
     "qrcode": "^1.5.4"
   }
 }

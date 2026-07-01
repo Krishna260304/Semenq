@@ -7,15 +7,6 @@ import { useState } from "react";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
 
-const mockUsers = [
-  { id: 1, name: "Arjun Mehta", email: "arjun.mehta@gmail.com", phone: "+91 98765 43210", role: "patient", city: "Mumbai", state: "Maharashtra", isVerified: true, createdAt: "2024-03-15T10:00:00Z", orders: 14 },
-  { id: 2, name: "Sunita Sharma", email: "sunita@apollopharmacy.in", phone: "+91 87654 32109", role: "pharmacy", city: "Mumbai", state: "Maharashtra", isVerified: true, createdAt: "2023-11-20T10:00:00Z", orders: 0 },
-  { id: 3, name: "Rajan Mehta", email: "rajan.mehta@yahoo.com", phone: "+91 76543 21098", role: "patient", city: "Pune", state: "Maharashtra", isVerified: true, createdAt: "2024-05-10T10:00:00Z", orders: 8 },
-  { id: 4, name: "Karthik Reddy", email: "karthik@netmeds.com", phone: "+91 65432 10987", role: "pharmacy", city: "Bengaluru", state: "Karnataka", isVerified: true, createdAt: "2024-01-08T10:00:00Z", orders: 0 },
-  { id: 5, name: "Priya Nair", email: "priya.nair@hotmail.com", phone: "+91 54321 09876", role: "patient", city: "Thiruvananthapuram", state: "Kerala", isVerified: false, createdAt: "2025-06-20T10:00:00Z", orders: 2 },
-  { id: 6, name: "Dr. Vikram Bose", email: "vikram.bose@apollo.com", phone: "+91 43210 98765", role: "patient", city: "Kolkata", state: "West Bengal", isVerified: true, createdAt: "2024-09-12T10:00:00Z", orders: 31 },
-];
-
 const roleColors: Record<string, string> = {
   patient: "bg-primary/10 text-primary",
   pharmacy: "bg-ai/10 text-ai",
@@ -25,8 +16,9 @@ const roleColors: Record<string, string> = {
 export default function AdminUsers() {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState("all");
+  const users: any[] = [];
 
-  const filtered = mockUsers.filter(u => {
+  const filtered = users.filter(u => {
     const match = u.name.toLowerCase().includes(query.toLowerCase()) || u.email.toLowerCase().includes(query.toLowerCase());
     const roleMatch = filter === "all" || u.role === filter;
     return match && roleMatch;
@@ -39,9 +31,9 @@ export default function AdminUsers() {
       <div className="p-6 max-w-6xl space-y-5">
         <div className="grid grid-cols-3 gap-4">
           {[
-            ["Total Users", mockUsers.length, "bg-primary/10 text-primary"],
-            ["Patients", mockUsers.filter(u => u.role === "patient").length, "bg-success/10 text-success"],
-            ["Pharmacies", mockUsers.filter(u => u.role === "pharmacy").length, "bg-ai/10 text-ai"],
+            ["Total Users", users.length, "bg-primary/10 text-primary"],
+            ["Patients", users.filter(u => u.role === "patient").length, "bg-success/10 text-success"],
+            ["Pharmacies", users.filter(u => u.role === "pharmacy").length, "bg-ai/10 text-ai"],
           ].map(([label, count, color]) => (
             <div key={label as string} className="bg-card border border-card-border rounded-[20px] p-5 flex items-center gap-4">
               <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${color}`}>
@@ -112,9 +104,10 @@ export default function AdminUsers() {
         {filtered.length === 0 && (
           <div className="text-center py-16 text-muted-foreground">
             <Users className="w-10 h-10 mx-auto mb-3 opacity-30" />
-            <p>No users match your search</p>
+            <p>No live users returned by the backend yet</p>
           </div>
         )}
+
       </div>
     </AdminLayout>
   );

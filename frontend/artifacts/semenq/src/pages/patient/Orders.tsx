@@ -7,14 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
 import { useListOrders } from "@workspace/api-client-react";
 import { SkeletonCard } from "@/components/SkeletonCard";
-import { sampleUser } from "@/lib/mockData";
-
-const mockOrders = [
-  { id: 1, medicineName: "Metformin 500mg", pharmacyName: "Apollo Pharmacy, Bandra", status: "delivered", totalAmount: 84, paymentMethod: "UPI", deliveryType: "pickup", estimatedDelivery: "Collected on Jun 25", reservationId: 1, paymentStatus: "paid", deliveryAddress: null, trackingId: null, createdAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(), updatedAt: new Date().toISOString() },
-  { id: 2, medicineName: "Amoxicillin 500mg", pharmacyName: "Netmeds Point, Bengaluru", status: "shipped", totalAmount: 197, paymentMethod: "UPI", deliveryType: "courier", estimatedDelivery: "Tomorrow by 7 PM", reservationId: 2, paymentStatus: "paid", deliveryAddress: "402, Shree Sai Apartments, Andheri West", trackingId: "NM20260628A1", createdAt: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(), updatedAt: new Date().toISOString() },
-  { id: 3, medicineName: "Atorvastatin 20mg", pharmacyName: "MedPlus, Andheri West", status: "placed", totalAmount: 85, paymentMethod: "Card", deliveryType: "pickup", estimatedDelivery: "Ready in 1 hour", reservationId: 3, paymentStatus: "paid", deliveryAddress: null, trackingId: null, createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(), updatedAt: new Date().toISOString() },
-  { id: 4, medicineName: "Pantoprazole 40mg", pharmacyName: "Wellness Forever, Pune", status: "cancelled", totalAmount: 62.5, paymentMethod: "UPI", deliveryType: "pickup", estimatedDelivery: "—", reservationId: 4, paymentStatus: "refunded", deliveryAddress: null, trackingId: null, createdAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(), updatedAt: new Date().toISOString() },
-];
+import { useGetMyProfile } from "@workspace/api-client-react";
 
 const statusConfig: Record<string, { label: string; color: string; icon: any }> = {
   placed: { label: "Order Placed", color: "bg-primary/10 text-primary border-primary/20", icon: Package },
@@ -28,9 +21,10 @@ const statusConfig: Record<string, { label: string; color: string; icon: any }> 
 const tabs = ["All", "Active", "Delivered", "Cancelled"];
 
 export default function Orders() {
+  const { data: profile } = useGetMyProfile();
   const [activeTab, setActiveTab] = useState("All");
   const { data, isLoading } = useListOrders();
-  const orders = (Array.isArray(data) ? data : mockOrders) as typeof mockOrders;
+  const orders = (Array.isArray(data) ? data : []) as any[];
 
   const filtered = orders.filter(o => {
     if (activeTab === "Active") return ["placed", "processing", "packed", "shipped"].includes(o.status);
@@ -41,7 +35,7 @@ export default function Orders() {
 
   return (
     <PatientLayout>
-      <TopBar title="Orders & Tracking" userName={sampleUser.name} />
+      <TopBar title="Orders & Tracking" userName={(profile as any)?.name || "Guest"} />
 
       <div className="p-6 max-w-3xl">
         <div className="flex gap-2 mb-6 p-1 bg-muted rounded-xl w-fit">

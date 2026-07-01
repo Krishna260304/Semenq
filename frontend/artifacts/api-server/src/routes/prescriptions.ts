@@ -10,10 +10,10 @@ const DEMO_USER_ID = 1;
 router.get("/prescriptions", async (req, res) => {
   try {
     const list = await db.select().from(prescriptionsTable).where(eq(prescriptionsTable.userId, DEMO_USER_ID));
-    res.json(list);
+    return res.json(list);
   } catch (e) {
     req.log.error(e);
-    res.status(500).json({ error: "Failed to fetch prescriptions" });
+    return res.status(500).json({ error: "Failed to fetch prescriptions" });
   }
 });
 
@@ -22,10 +22,10 @@ router.get("/prescriptions/:id", async (req, res) => {
     const [rx] = await db.select().from(prescriptionsTable).where(eq(prescriptionsTable.id, Number(req.params.id)));
     if (!rx) return res.status(404).json({ error: "Prescription not found" });
     const medicines = await db.select().from(parsedMedicinesTable).where(eq(parsedMedicinesTable.prescriptionId, rx.id));
-    res.json({ ...rx, medicines });
+    return res.json({ ...rx, medicines });
   } catch (e) {
     req.log.error(e);
-    res.status(500).json({ error: "Failed to fetch prescription" });
+    return res.status(500).json({ error: "Failed to fetch prescription" });
   }
 });
 
@@ -50,10 +50,10 @@ router.post("/prescriptions/upload", async (req, res) => {
     ];
     await db.insert(parsedMedicinesTable).values(parsedMeds);
     const medicines = await db.select().from(parsedMedicinesTable).where(eq(parsedMedicinesTable.prescriptionId, rx.id));
-    res.json({ ...rx, medicines });
+    return res.json({ ...rx, medicines });
   } catch (e) {
     req.log.error(e);
-    res.status(500).json({ error: "Failed to upload prescription" });
+    return res.status(500).json({ error: "Failed to upload prescription" });
   }
 });
 

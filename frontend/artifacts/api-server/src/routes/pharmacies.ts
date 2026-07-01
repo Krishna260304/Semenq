@@ -11,10 +11,10 @@ router.get("/pharmacies", async (req, res) => {
     let list = await db.select().from(pharmaciesTable);
     if (city) list = list.filter(p => p.city.toLowerCase().includes(city.toLowerCase()));
     if (state) list = list.filter(p => p.state.toLowerCase().includes(state.toLowerCase()));
-    res.json(list);
+    return res.json(list);
   } catch (e) {
     req.log.error(e);
-    res.status(500).json({ error: "Failed to fetch pharmacies" });
+    return res.status(500).json({ error: "Failed to fetch pharmacies" });
   }
 });
 
@@ -22,10 +22,10 @@ router.get("/pharmacies/:id", async (req, res) => {
   try {
     const [ph] = await db.select().from(pharmaciesTable).where(eq(pharmaciesTable.id, Number(req.params.id)));
     if (!ph) return res.status(404).json({ error: "Pharmacy not found" });
-    res.json(ph);
+    return res.json(ph);
   } catch (e) {
     req.log.error(e);
-    res.status(500).json({ error: "Failed to fetch pharmacy" });
+    return res.status(500).json({ error: "Failed to fetch pharmacy" });
   }
 });
 
@@ -40,10 +40,10 @@ router.get("/pharmacies/:id/inventory", async (req, res) => {
       ...item,
       stockStatus: Number(item.quantity) === 0 ? "outOfStock" : Number(item.quantity) <= Number(item.reorderLevel) ? "lowStock" : "inStock",
     }));
-    res.json(withStatus);
+    return res.json(withStatus);
   } catch (e) {
     req.log.error(e);
-    res.status(500).json({ error: "Failed to fetch inventory" });
+    return res.status(500).json({ error: "Failed to fetch inventory" });
   }
 });
 
@@ -51,10 +51,10 @@ router.put("/pharmacies/:id/inventory/:itemId", async (req, res) => {
   try {
     const { quantity, price, mrp } = req.body;
     await db.update(inventoryTable).set({ quantity: quantity ?? undefined, price: price ?? undefined, mrp: mrp ?? undefined, updatedAt: new Date() }).where(eq(inventoryTable.id, Number(req.params.itemId)));
-    res.json({ success: true });
+    return res.json({ success: true });
   } catch (e) {
     req.log.error(e);
-    res.status(500).json({ error: "Failed to update inventory" });
+    return res.status(500).json({ error: "Failed to update inventory" });
   }
 });
 
