@@ -68,7 +68,8 @@ class Settings(BaseSettings):
     AZURE_OCR_KEY: str = "your-azure-key"
 
     AI_PROVIDER: Literal["openai", "gemini", "claude", "groq"] = "groq"
-    GROQ_API_KEY: str = "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"
+    # Do NOT hardcode secrets. Provide via environment variables or a local .env file.
+    GROQ_API_KEY: str = ""
     GROQ_MODEL: str = "openai/gpt-oss-120b"
     OPENAI_API_KEY: str = ""
     OPENAI_MODEL: str = "gpt-4o"
