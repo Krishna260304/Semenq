@@ -4,6 +4,12 @@ import { Activity, ArrowRight, ArrowLeft, Check, User, Building2, Eye, EyeOff } 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { HumanCheck, createCaptchaChallenge, isCaptchaSolved } from "@/components/HumanCheck";
+import { PhoneNumberField } from "@/components/PhoneNumberField";
+import { auth } from "@/lib/firebase";
+import { composePhoneNumber, getAuthErrorMessage, getRoleDashboardPath, isValidPhoneNumber, normalizeEmail, saveRegisteredUserRole } from "@/lib/auth";
+import { createUserWithEmailAndPassword, updateProfile } from "firebase/auth";
+import { toast } from "sonner";
 
 type Role = "patient" | "pharmacy" | null;
 
@@ -14,18 +20,104 @@ export default function Register() {
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const [form, setForm] = useState({ name: "", email: "", phone: "", city: "", state: "", pincode: "", address: "", password: "", businessName: "", licenseNumber: "" });
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [termsAccepted, setTermsAccepted] = useState(false);
+  const [captcha, setCaptcha] = useState(createCaptchaChallenge);
+  const [captchaAnswer, setCaptchaAnswer] = useState("");
+  const [form, setForm] = useState({
+    name: "",
+    email: "",
+    phoneDialCode: "91",
+    phoneNumber: "",
+    city: "",
+    state: "",
+    pincode: "",
+    address: "",
+    password: "",
+    businessName: "",
+    licenseNumber: "",
+  });
 
   const update = (k: string, v: string) => setForm(prev => ({ ...prev, [k]: v }));
+  const refreshCaptcha = () => {
+    setCaptcha(createCaptchaChallenge());
+    setCaptchaAnswer("");
+  };
 
   const totalSteps = role === "patient" ? 3 : 3;
 
+  const validateCurrentStep = () => {
+    if (!role) return false;
+
+    if (step === 1) {
+      const phone = composePhoneNumber(form.phoneDialCode, form.phoneNumber);
+      const phoneIsValid = isValidPhoneNumber(phone);
+      const missingPatientInfo = role === "patient" && (!form.name.trim() || !form.email.trim() || !phoneIsValid);
+      const missingPharmacyInfo = role === "pharmacy" && (!form.businessName.trim() || !form.name.trim() || !form.licenseNumber.trim() || !form.email.trim() || !phoneIsValid);
+
+      if (missingPatientInfo || missingPharmacyInfo) {
+        toast.error("Please complete all required account details.");
+        return false;
+      }
+    }
+
+    if (step === 2 && (!form.address.trim() || !form.city.trim() || !form.state.trim() || !form.pincode.trim())) {
+      toast.error("Please complete your address details.");
+      return false;
+    }
+
+    if (step === 3) {
+      if (form.password.length < 8) {
+        toast.error("Password must be at least 8 characters.");
+        return false;
+      }
+
+      if (form.password !== confirmPassword) {
+        toast.error("Passwords do not match.");
+        return false;
+      }
+
+      if (!termsAccepted) {
+        toast.error("Please accept the Terms of Service and Privacy Policy.");
+        return false;
+      }
+
+      if (!isCaptchaSolved(captcha, captchaAnswer)) {
+        toast.error("Captcha answer is incorrect. Please try the new challenge.");
+        refreshCaptcha();
+        return false;
+      }
+    }
+
+    return true;
+  };
+
+  const handleContinue = () => {
+    if (validateCurrentStep()) {
+      setStep(s => s + 1);
+    }
+  };
+
   const handleSubmit = async () => {
+    if (!role || !validateCurrentStep()) return;
+
     setLoading(true);
-    await new Promise(r => setTimeout(r, 1500));
-    setLoading(false);
-    if (role === "patient") window.location.href = "/patient/dashboard";
-    else window.location.href = "/pharmacy/dashboard";
+    try {
+      const credential = await createUserWithEmailAndPassword(auth, normalizeEmail(form.email), form.password);
+      const displayName = role === "patient" ? form.name.trim() : form.businessName.trim();
+      const phone = composePhoneNumber(form.phoneDialCode, form.phoneNumber);
+
+      await updateProfile(credential.user, { displayName });
+      saveRegisteredUserRole(credential.user.uid, form.email, role, phone);
+
+      toast.success("Account created successfully.");
+      window.location.assign(getRoleDashboardPath(role));
+    } catch (error) {
+      toast.error(getAuthErrorMessage(error));
+      refreshCaptcha();
+    } finally {
+      setLoading(false);
+    }
   };
 
   const ProgressStep = ({ num, label }: { num: number; label: string }) => (
@@ -154,20 +246,22 @@ export default function Register() {
           <div className="space-y-4">
             {step === 1 && role === "patient" && (
               <>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="col-span-2 space-y-2">
-                    <Label>Full Name</Label>
-                    <Input placeholder="Arjun Mehta" value={form.name} onChange={e => update("name", e.target.value)} className="h-11 rounded-[16px]" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Email</Label>
-                    <Input type="email" placeholder="arjun@gmail.com" value={form.email} onChange={e => update("email", e.target.value)} className="h-11 rounded-[16px]" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Phone</Label>
-                    <Input placeholder="+91 98765 43210" value={form.phone} onChange={e => update("phone", e.target.value)} className="h-11 rounded-[16px]" />
-                  </div>
+                <div className="space-y-2">
+                  <Label>Full Name</Label>
+                  <Input placeholder="Full name" value={form.name} onChange={e => update("name", e.target.value)} className="h-11 rounded-[16px]" />
                 </div>
+                <div className="space-y-2">
+                  <Label>Email</Label>
+                  <Input type="email" placeholder="name@example.com" value={form.email} onChange={e => update("email", e.target.value)} className="h-11 rounded-[16px]" />
+                </div>
+                <PhoneNumberField
+                  label="Phone"
+                  inputId="patient-phone"
+                  dialCode={form.phoneDialCode}
+                  phoneNumber={form.phoneNumber}
+                  onDialCodeChange={value => update("phoneDialCode", value)}
+                  onPhoneNumberChange={value => update("phoneNumber", value)}
+                />
               </>
             )}
 
@@ -175,26 +269,30 @@ export default function Register() {
               <>
                 <div className="space-y-2">
                   <Label>Pharmacy / Business Name</Label>
-                  <Input placeholder="Apollo Pharmacy - Bandra" value={form.businessName} onChange={e => update("businessName", e.target.value)} className="h-11 rounded-[16px]" />
+                  <Input placeholder="Business name" value={form.businessName} onChange={e => update("businessName", e.target.value)} className="h-11 rounded-[16px]" />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label>Owner Name</Label>
-                    <Input placeholder="Sunita Sharma" value={form.name} onChange={e => update("name", e.target.value)} className="h-11 rounded-[16px]" />
+                    <Input placeholder="Owner name" value={form.name} onChange={e => update("name", e.target.value)} className="h-11 rounded-[16px]" />
                   </div>
                   <div className="space-y-2">
                     <Label>License Number</Label>
-                    <Input placeholder="MH-MUM-2019-08821" value={form.licenseNumber} onChange={e => update("licenseNumber", e.target.value)} className="h-11 rounded-[16px]" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Phone</Label>
-                    <Input placeholder="+91 87654 32109" value={form.phone} onChange={e => update("phone", e.target.value)} className="h-11 rounded-[16px]" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Email</Label>
-                    <Input type="email" placeholder="pharmacy@example.com" value={form.email} onChange={e => update("email", e.target.value)} className="h-11 rounded-[16px]" />
+                    <Input placeholder="License number" value={form.licenseNumber} onChange={e => update("licenseNumber", e.target.value)} className="h-11 rounded-[16px]" />
                   </div>
                 </div>
+                <div className="space-y-2">
+                  <Label>Email</Label>
+                  <Input type="email" placeholder="name@example.com" value={form.email} onChange={e => update("email", e.target.value)} className="h-11 rounded-[16px]" />
+                </div>
+                <PhoneNumberField
+                  label="Phone"
+                  inputId="pharmacy-phone"
+                  dialCode={form.phoneDialCode}
+                  phoneNumber={form.phoneNumber}
+                  onDialCodeChange={value => update("phoneDialCode", value)}
+                  onPhoneNumberChange={value => update("phoneNumber", value)}
+                />
               </>
             )}
 
@@ -202,12 +300,12 @@ export default function Register() {
               <>
                 <div className="space-y-2">
                   <Label>Full Address</Label>
-                  <Input placeholder="Shop 12, Lokhandwala Complex, Andheri West" value={form.address} onChange={e => update("address", e.target.value)} className="h-11 rounded-[16px]" />
+                  <Input placeholder="Full address" value={form.address} onChange={e => update("address", e.target.value)} className="h-11 rounded-[16px]" />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label>City</Label>
-                    <Input placeholder="Mumbai" value={form.city} onChange={e => update("city", e.target.value)} className="h-11 rounded-[16px]" />
+                    <Input placeholder="City" value={form.city} onChange={e => update("city", e.target.value)} className="h-11 rounded-[16px]" />
                   </div>
                   <div className="space-y-2">
                     <Label>State</Label>
@@ -218,7 +316,7 @@ export default function Register() {
                   </div>
                   <div className="space-y-2">
                     <Label>PIN Code</Label>
-                    <Input placeholder="400053" value={form.pincode} onChange={e => update("pincode", e.target.value)} className="h-11 rounded-[16px]" />
+                    <Input placeholder="PIN code" value={form.pincode} onChange={e => update("pincode", e.target.value)} className="h-11 rounded-[16px]" />
                   </div>
                 </div>
               </>
@@ -244,12 +342,30 @@ export default function Register() {
                 </div>
                 <div className="space-y-2">
                   <Label>Confirm Password</Label>
-                  <Input type="password" placeholder="••••••••" className="h-11 rounded-[16px]" />
+                  <Input
+                    type="password"
+                    placeholder="Confirm password"
+                    value={confirmPassword}
+                    onChange={e => setConfirmPassword(e.target.value)}
+                    className="h-11 rounded-[16px]"
+                  />
                 </div>
                 <div className="text-xs text-muted-foreground flex items-start gap-2">
-                  <input type="checkbox" className="mt-0.5" />
+                  <input
+                    type="checkbox"
+                    checked={termsAccepted}
+                    onChange={e => setTermsAccepted(e.target.checked)}
+                    className="mt-0.5"
+                  />
                   <span>I agree to Semenq's Terms of Service and Privacy Policy.</span>
                 </div>
+                <HumanCheck
+                  inputId="register-captcha"
+                  challenge={captcha}
+                  answer={captchaAnswer}
+                  onAnswerChange={setCaptchaAnswer}
+                  onRefresh={refreshCaptcha}
+                />
               </>
             )}
           </div>
@@ -261,7 +377,7 @@ export default function Register() {
               </Button>
             )}
             {step < totalSteps ? (
-              <Button onClick={() => setStep(s => s + 1)} className="flex-1 h-12 rounded-[18px] font-semibold">
+              <Button onClick={handleContinue} className="flex-1 h-12 rounded-[18px] font-semibold">
                 Continue <ArrowRight className="w-4 h-4 ml-2" />
               </Button>
             ) : (

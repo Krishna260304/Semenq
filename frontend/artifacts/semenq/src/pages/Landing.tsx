@@ -1,33 +1,12 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { Link } from "wouter";
-import { motion, useInView } from "framer-motion";
+import { motion } from "framer-motion";
 import {
   Search, MapPin, Truck, Shield, Zap, Clock, ChevronRight,
-  CheckCircle2, Star, ArrowRight, Activity, Pill, Building2,
+  ArrowRight, Activity, Pill, Building2,
   Users, Globe, Phone, Mail, Menu, X
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-
-function AnimatedCounter({ end, suffix = "" }: { end: number; suffix?: string }) {
-  const [count, setCount] = useState(0);
-  const ref = useRef<HTMLSpanElement>(null);
-  const inView = useInView(ref, { once: true });
-
-  useEffect(() => {
-    if (!inView) return;
-    let start = 0;
-    const duration = 2000;
-    const step = end / (duration / 16);
-    const timer = setInterval(() => {
-      start += step;
-      if (start >= end) { setCount(end); clearInterval(timer); }
-      else setCount(Math.floor(start));
-    }, 16);
-    return () => clearInterval(timer);
-  }, [inView, end]);
-
-  return <span ref={ref}>{count.toLocaleString("en-IN")}{suffix}</span>;
-}
 
 const features = [
   { icon: Search, title: "Intelligent Medicine Search", desc: "AI-powered search that expands from your neighbourhood to all of India until it finds what you need.", color: "bg-primary/10 text-primary" },
@@ -43,12 +22,6 @@ const steps = [
   { step: "02", title: "AI Searches Near You", desc: "We check nearby pharmacies first — then city, district, state, and nationally if needed." },
   { step: "03", title: "Reserve & Pay Securely", desc: "Choose pickup or courier, reserve your medicines, and pay safely via UPI, card, or net banking." },
   { step: "04", title: "Collect or Receive", desc: "Show your QR code at the pharmacy, or wait for doorstep delivery with live tracking." },
-];
-
-const testimonials = [
-  { name: "Dr. Ananya Sharma", role: "Cardiologist, Apollo Hospitals Mumbai", text: "Semenq has genuinely changed how my patients manage their medicines. For critical cardiac drugs that are often unavailable locally, this platform finds them nationally within minutes.", avatar: "AS", rating: 5 },
-  { name: "Rajan Mehta", role: "Diabetes Patient, Pune", text: "I used to drive 30 km to find my Metformin when local stocks ran out. Now I just open Semenq, and it finds the nearest pharmacy with stock in under a minute.", avatar: "RM", rating: 5 },
-  { name: "Priya Nair", role: "Pharmacy Owner, Bengaluru", text: "As a pharmacy, Semenq's demand forecasting has cut our dead stock by 40%. We know what to order before demand spikes.", avatar: "PN", rating: 5 },
 ];
 
 const faqs = [
@@ -177,54 +150,6 @@ export default function Landing() {
             </motion.div>
           </div>
 
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.8, delay: 0.5 }}
-            className="mt-20 max-w-2xl mx-auto"
-          >
-            <div className="bg-card border border-card-border rounded-[28px] p-8 shadow-2xl">
-              <p className="text-center text-sm font-medium text-muted-foreground mb-6">Searching for Metformin 500mg...</p>
-              <div className="space-y-3">
-                {[
-                  { label: "Nearby (2 km)", status: "checking", color: "bg-primary" },
-                  { label: "Andheri West", status: "found", color: "bg-success" },
-                  { label: "Mumbai City", status: "standby", color: "bg-muted" },
-                  { label: "Maharashtra", status: "standby", color: "bg-muted" },
-                  { label: "All India", status: "standby", color: "bg-muted" },
-                ].map((zone, i) => (
-                  <div key={zone.label} className="flex items-center gap-3">
-                    <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${zone.status === "found" ? "bg-success" : zone.status === "checking" ? "bg-primary animate-pulse" : "bg-border"}`} />
-                    <div className={`flex-1 h-9 rounded-xl flex items-center px-4 text-sm font-medium transition-all ${zone.status === "found" ? "bg-success/10 text-success border border-success/20" : zone.status === "checking" ? "bg-primary/10 text-primary border border-primary/20" : "bg-muted/40 text-muted-foreground"}`}>
-                      {zone.label}
-                      {zone.status === "found" && <span className="ml-auto text-success font-semibold">3 pharmacies found</span>}
-                      {zone.status === "checking" && <span className="ml-auto text-primary">Searching...</span>}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </motion.div>
-        </div>
-      </section>
-
-      <section className="py-16 bg-foreground/[0.02] border-y border-border">
-        <div className="max-w-7xl mx-auto px-6">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
-            {[
-              { label: "Patients Helped", end: 2400000, suffix: "+" },
-              { label: "Partner Pharmacies", end: 18000, suffix: "+" },
-              { label: "Medicine Availability", end: 99, suffix: ".2%" },
-              { label: "Average Rating", end: 4, suffix: ".8/5" },
-            ].map(stat => (
-              <div key={stat.label}>
-                <div className="text-4xl font-bold text-foreground mb-1">
-                  <AnimatedCounter end={stat.end} suffix={stat.suffix} />
-                </div>
-                <p className="text-sm text-muted-foreground font-medium">{stat.label}</p>
-              </div>
-            ))}
-          </div>
         </div>
       </section>
 
@@ -294,43 +219,6 @@ export default function Landing() {
                   </div>
                   <h3 className="font-semibold text-foreground mb-2">{step.title}</h3>
                   <p className="text-sm text-muted-foreground">{step.desc}</p>
-                </div>
-              </motion.div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      <section className="py-24">
-        <div className="max-w-7xl mx-auto px-6">
-          <div className="text-center mb-16">
-            <h2 className="text-4xl font-bold text-foreground mb-4">Trusted by patients and pharmacies</h2>
-          </div>
-
-          <div className="grid md:grid-cols-3 gap-6">
-            {testimonials.map((t, i) => (
-              <motion.div
-                key={t.name}
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ delay: i * 0.1 }}
-                className="bg-card border border-card-border rounded-[24px] p-6 card-lift"
-              >
-                <div className="flex gap-1 mb-4">
-                  {Array.from({ length: t.rating }).map((_, j) => (
-                    <Star key={j} className="w-4 h-4 fill-warning text-warning" />
-                  ))}
-                </div>
-                <p className="text-sm text-foreground leading-relaxed mb-5">"{t.text}"</p>
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-                    <span className="text-sm font-bold text-primary">{t.avatar}</span>
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold text-foreground">{t.name}</p>
-                    <p className="text-xs text-muted-foreground">{t.role}</p>
-                  </div>
                 </div>
               </motion.div>
             ))}
@@ -419,12 +307,7 @@ export default function Landing() {
             ))}
           </div>
           <div className="flex flex-col md:flex-row items-center justify-between pt-8 border-t border-border gap-4">
-            <p className="text-sm text-muted-foreground">© 2026 Semenq Technologies Pvt. Ltd. All rights reserved.</p>
-            <div className="flex items-center gap-4 text-sm text-muted-foreground">
-              <span>CDSCO Registered Platform</span>
-              <span>·</span>
-              <span>ISO 27001 Certified</span>
-            </div>
+            <p className="text-sm text-muted-foreground">(c) 2026 Semenq Technologies Pvt. Ltd. All rights reserved.</p>
           </div>
         </div>
       </footer>

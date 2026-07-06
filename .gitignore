@@ -1,0 +1,53 @@
+# Root .gitignore for the project
+
+# Node
+node_modules/
+.pnpm-store/
+
+# Frontend build/artifacts
+dist/
+build/
+out/
+artifacts/
+frontend/artifacts/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.venv/
+venv/
+env/
+ENV/
+*.sqlite
+*.db
+.pytest_cache/
+
+# Environment files
+.env
+.env.*
+
+# IDEs and editors
+.vscode/
+.idea/
+*.swp
+
+# Logs
+*.log
+logs/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Backend uploads/user content
+backend/uploads/
+uploads/
+
+# Misc
+coverage/
+coverage-final.json
+npm-debug.log
+yarn-error.log
+pnpm-debug.log

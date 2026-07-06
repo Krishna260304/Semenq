@@ -1,9 +1,36 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "wouter";
 import { Activity, Eye, EyeOff, ArrowRight, Shield, Zap, MapPin } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { HumanCheck, createCaptchaChallenge, isCaptchaSolved } from "@/components/HumanCheck";
+import { PhoneNumberField } from "@/components/PhoneNumberField";
+import { auth } from "@/lib/firebase";
+import {
+  composePhoneNumber,
+  getAuthErrorMessage,
+  getRegisteredPhoneRole,
+  getRegisteredUserRole,
+  getRoleDashboardPath,
+  isValidPhoneNumber,
+  normalizeEmail,
+  saveRegisteredPhoneRole,
+} from "@/lib/auth";
+import {
+  ConfirmationResult,
+  RecaptchaVerifier,
+  signInWithEmailAndPassword,
+  signInWithPhoneNumber,
+  signOut,
+} from "firebase/auth";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { toast } from "sonner";
 
 export default function Login() {
@@ -12,20 +39,142 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [role, setRole] = useState<"patient" | "pharmacy" | "admin">("patient");
+  const [captcha, setCaptcha] = useState(createCaptchaChallenge);
+  const [captchaAnswer, setCaptchaAnswer] = useState("");
+  const [otpOpen, setOtpOpen] = useState(false);
+  const [otpDialCode, setOtpDialCode] = useState("91");
+  const [otpPhoneNumber, setOtpPhoneNumber] = useState("");
+  const [otpCode, setOtpCode] = useState("");
+  const [otpConfirmation, setOtpConfirmation] = useState<ConfirmationResult | null>(null);
+  const [otpSending, setOtpSending] = useState(false);
+  const [otpVerifying, setOtpVerifying] = useState(false);
+  const recaptchaRef = useRef<RecaptchaVerifier | null>(null);
+
+  useEffect(() => {
+    return () => {
+      recaptchaRef.current?.clear();
+      recaptchaRef.current = null;
+    };
+  }, []);
+
+  const refreshCaptcha = () => {
+    setCaptcha(createCaptchaChallenge());
+    setCaptchaAnswer("");
+  };
+
+  const getRecaptchaVerifier = () => {
+    if (!recaptchaRef.current) {
+      recaptchaRef.current = new RecaptchaVerifier(auth, "login-recaptcha-container", {
+        size: "invisible",
+      });
+    }
+
+    return recaptchaRef.current;
+  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
-    await new Promise(r => setTimeout(r, 1200));
-    setLoading(false);
 
-    if (role === "patient") window.location.href = "/patient/dashboard";
-    else if (role === "pharmacy") window.location.href = "/pharmacy/dashboard";
-    else window.location.href = "/admin/dashboard";
+    if (!isCaptchaSolved(captcha, captchaAnswer)) {
+      toast.error("Captcha answer is incorrect. Please try the new challenge.");
+      refreshCaptcha();
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const credential = await signInWithEmailAndPassword(auth, normalizeEmail(email), password);
+      const registeredRole = getRegisteredUserRole(credential.user.uid, credential.user.email);
+
+      if (registeredRole && registeredRole !== role) {
+        await signOut(auth);
+        toast.error(`This account is registered as ${registeredRole}. Select the correct role to continue.`);
+        refreshCaptcha();
+        return;
+      }
+
+      toast.success("Signed in successfully.");
+      window.location.assign(getRoleDashboardPath(registeredRole || role));
+    } catch (error) {
+      toast.error(getAuthErrorMessage(error));
+      refreshCaptcha();
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSendOtp = async () => {
+    const normalizedPhone = composePhoneNumber(otpDialCode, otpPhoneNumber);
+
+    if (!isValidPhoneNumber(normalizedPhone)) {
+      toast.error("Enter a valid country code and phone number.");
+      return;
+    }
+
+    const registeredRole = getRegisteredPhoneRole(normalizedPhone);
+    if (!registeredRole) {
+      toast.error("This phone number is not registered. Create an account first.");
+      return;
+    }
+
+    if (registeredRole !== role) {
+      toast.error(`This phone number is registered as ${registeredRole}. Select the correct role to continue.`);
+      return;
+    }
+
+    setOtpSending(true);
+    try {
+      const confirmation = await signInWithPhoneNumber(auth, normalizedPhone, getRecaptchaVerifier());
+      setOtpConfirmation(confirmation);
+      toast.success("OTP sent by SMS.");
+    } catch (error) {
+      recaptchaRef.current?.clear();
+      recaptchaRef.current = null;
+      toast.error(getAuthErrorMessage(error));
+    } finally {
+      setOtpSending(false);
+    }
+  };
+
+  const handleVerifyOtp = async () => {
+    if (!otpConfirmation) {
+      toast.error("Please request an OTP first.");
+      return;
+    }
+
+    if (!otpCode.trim()) {
+      toast.error("Enter the OTP sent to your phone.");
+      return;
+    }
+
+    setOtpVerifying(true);
+    try {
+      const credential = await otpConfirmation.confirm(otpCode.trim());
+      const phone = composePhoneNumber(otpDialCode, otpPhoneNumber);
+      saveRegisteredPhoneRole(phone, role, credential.user.uid);
+      toast.success("Signed in with OTP.");
+      window.location.assign(getRoleDashboardPath(role));
+    } catch (error) {
+      toast.error(getAuthErrorMessage(error));
+    } finally {
+      setOtpVerifying(false);
+    }
+  };
+
+  const resetOtpDialog = (open: boolean) => {
+    setOtpOpen(open);
+
+    if (!open) {
+      setOtpDialCode("91");
+      setOtpPhoneNumber("");
+      setOtpCode("");
+      setOtpConfirmation(null);
+    }
   };
 
   return (
     <div className="min-h-screen flex">
+      <div id="login-recaptcha-container" />
       <div className="hidden lg:flex lg:w-1/2 relative bg-gradient-to-br from-[#1e40af] via-primary to-ai flex-col justify-between p-12 overflow-hidden">
         <div className="absolute inset-0 opacity-20">
           <div className="absolute top-20 left-10 w-64 h-64 bg-white rounded-full blur-3xl" />
@@ -71,8 +220,8 @@ export default function Login() {
         <div className="relative">
           <div className="bg-white/10 backdrop-blur rounded-2xl p-4 border border-white/20">
             <p className="text-white/70 text-xs mb-2 font-medium">WHAT OUR USERS SAY</p>
-            <p className="text-white text-sm">"I used to spend hours finding cardiac medicines. Semenq finds them in seconds."</p>
-            <p className="text-white/60 text-xs mt-2">— Dr. Ananya Sharma, Apollo Hospitals</p>
+            <p className="text-white text-sm">"I used to spend hours finding medicines. Semenq makes the search quick and simple."</p>
+            <p className="text-white/60 text-xs mt-2">— Pharmacy team member</p>
           </div>
         </div>
       </div>
@@ -111,7 +260,7 @@ export default function Login() {
               <Input
                 id="email"
                 type="email"
-                placeholder="arjun.mehta@gmail.com"
+                placeholder="name@example.com"
                 value={email}
                 onChange={e => setEmail(e.target.value)}
                 className="h-12 rounded-[16px]"
@@ -144,6 +293,14 @@ export default function Login() {
               </div>
             </div>
 
+            <HumanCheck
+              inputId="login-captcha"
+              challenge={captcha}
+              answer={captchaAnswer}
+              onAnswerChange={setCaptchaAnswer}
+              onRefresh={refreshCaptcha}
+            />
+
             <Button
               type="submit"
               className="w-full h-12 rounded-[18px] font-semibold gap-2"
@@ -167,11 +324,12 @@ export default function Login() {
           </div>
 
           <div className="grid grid-cols-2 gap-3">
-            {["Google", "OTP"].map(method => (
-              <Button key={method} variant="outline" className="h-12 rounded-[16px]" onClick={() => toast.info(`${method} login coming soon`)}>
-                {method} {method === "OTP" && <span className="ml-1 text-xs text-muted-foreground">via SMS</span>}
-              </Button>
-            ))}
+            <Button type="button" variant="outline" className="h-12 rounded-[16px]" onClick={() => toast.info("Google login coming soon")}>
+              Google
+            </Button>
+            <Button type="button" variant="outline" className="h-12 rounded-[16px]" onClick={() => resetOtpDialog(true)}>
+              OTP <span className="ml-1 text-xs text-muted-foreground">via SMS</span>
+            </Button>
           </div>
 
           <p className="text-center text-sm text-muted-foreground mt-6">
@@ -182,6 +340,67 @@ export default function Login() {
           </p>
         </div>
       </div>
+
+      <Dialog open={otpOpen} onOpenChange={resetOtpDialog}>
+        <DialogContent className="rounded-[20px] sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Sign in with OTP</DialogTitle>
+            <DialogDescription>
+              Use the phone number from your registered Semenq account.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <PhoneNumberField
+                label="Phone"
+                inputId="otp-phone"
+                dialCode={otpDialCode}
+                phoneNumber={otpPhoneNumber}
+                onDialCodeChange={setOtpDialCode}
+                onPhoneNumberChange={setOtpPhoneNumber}
+                disabled={Boolean(otpConfirmation)}
+              />
+              {!otpConfirmation ? (
+                <Button
+                  type="button"
+                  className="h-11 w-full rounded-[16px]"
+                  onClick={handleSendOtp}
+                  disabled={otpSending}
+                >
+                  {otpSending ? "Sending" : "Send OTP"}
+                </Button>
+              ) : null}
+            </div>
+
+            {otpConfirmation && (
+              <div className="space-y-2">
+                <Label htmlFor="otp-code">OTP code</Label>
+                <Input
+                  id="otp-code"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  placeholder="6-digit code"
+                  value={otpCode}
+                  onChange={e => setOtpCode(e.target.value)}
+                  className="h-11 rounded-[16px] tracking-[0.25em]"
+                />
+              </div>
+            )}
+
+            {otpConfirmation ? (
+              <Button
+                type="button"
+                className="w-full h-11 rounded-[16px] font-semibold"
+                onClick={handleVerifyOtp}
+                disabled={otpVerifying}
+              >
+                {otpVerifying ? "Verifying" : "Verify and sign in"}
+              </Button>
+            ) : null}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
