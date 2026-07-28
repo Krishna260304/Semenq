@@ -195,13 +195,14 @@ export default function Login() {
         }),
       });
 
-      const selectedRole = registeredRole || role;
+      const selectedRole = (result.data.role as typeof role) || registeredRole || role;
       const customToken = result.data.firebase_custom_token;
       if (!customToken) {
         throw new Error("Could not start a Firebase session. Please contact support.");
       }
 
-      await signInWithCustomToken(auth, customToken);
+      const userCred = await signInWithCustomToken(auth, customToken);
+      saveRegisteredUserRole(userCred.user.uid, result.data.email || email, selectedRole);
 
       const profileResponse = await apiJson<{ data?: { twoFactorEnabled?: boolean } }>("/api/users/me");
       const needsTwoFactor = Boolean(profileResponse?.data?.twoFactorEnabled);
