@@ -62,14 +62,17 @@ class Settings(BaseSettings):
     CLOUDINARY_FOLDER_MEDICINES: str = "semenq/medicines"
     CLOUDINARY_FOLDER_PROFILES: str = "semenq/profiles"
 
-    OCR_PROVIDER: Literal["easyocr", "paddleocr", "tesseract"] = "paddleocr"
+    OCR_PROVIDER: Literal["paddleocr"] = "paddleocr"
+    ML_DEVICE: Literal["cuda", "cpu", "auto"] = "cuda"
+    OCR_FAST_PATH_ENABLED: bool = False
+    OCR_FAST_CONFIDENCE_THRESHOLD: float = 0.55
     GOOGLE_VISION_CREDENTIALS_FILE: str = "/path/to/service-account.json"
     AZURE_OCR_ENDPOINT: str = "https://your-endpoint.cognitiveservices.azure.com/"
     AZURE_OCR_KEY: str = "your-azure-key"
 
     AI_PROVIDER: Literal["openai", "gemini", "claude", "qwen"] = "qwen"
     QWEN_BASE_URL: str = "http://localhost:11434/v1"
-    QWEN_MODEL: str = "qwen:8b"
+    QWEN_MODEL: str = "qwen3:8b"
     OPENAI_API_KEY: str = ""
     OPENAI_MODEL: str = "gpt-4o"
     GEMINI_API_KEY: str = ""
@@ -86,9 +89,9 @@ class Settings(BaseSettings):
     SHIPROCKET_PASSWORD: str = "your-shiprocket-password"
     SHIPROCKET_BASE_URL: str = "https://apiv2.shiprocket.in/v1/external"
 
-    MAIL_USERNAME: str = "your-email@domain.com"
-    MAIL_PASSWORD: str = "your-email-password"
-    MAIL_FROM: str = "noreply@semenq.com"
+    MAIL_USERNAME: str = "support.semenq@gmail.com"
+    MAIL_PASSWORD: str = ""
+    MAIL_FROM: str = "support.semenq@gmail.com"
     MAIL_PORT: int = 587
     MAIL_SERVER: str = "smtp.gmail.com"
     MAIL_STARTTLS: bool = True
@@ -124,7 +127,7 @@ class Settings(BaseSettings):
     LOG_MAX_BYTES: int = 10_485_760
     LOG_BACKUP_COUNT: int = 5
 
-    SUPER_ADMIN_EMAIL: str = "admin@semenq.com"
+    SUPER_ADMIN_EMAIL: str = "support.semenq@gmail.com"
     SUPER_ADMIN_PASSWORD: str = "change-this-immediately"
 
     @property
@@ -166,8 +169,21 @@ class Settings(BaseSettings):
         if self.APP_ENV == Environment.PRODUCTION:
             if self.DEBUG:
                 raise ValueError("DEBUG must be False in production")
-            if len(self.SECRET_KEY) < 64:
-                raise ValueError("SECRET_KEY must be at least 64 chars in production")
+            secret_values = {
+                "SECRET_KEY": self.SECRET_KEY,
+                "JWT_SECRET_KEY": self.JWT_SECRET_KEY,
+            }
+            for name, value in secret_values.items():
+                if len(value) < 64 or value.startswith("change-me"):
+                    raise ValueError(f"{name} must be a unique random value of at least 64 characters in production")
+            if any(host in {"localhost", "127.0.0.1", "*"} for host in self.ALLOWED_HOSTS):
+                raise ValueError("ALLOWED_HOSTS must contain only production hostnames")
+            if any(origin.startswith("http://localhost") or origin.startswith("http://127.0.0.1") for origin in self.CORS_ORIGINS):
+                raise ValueError("CORS_ORIGINS must contain only production origins")
+            if not self.MAIL_PASSWORD:
+                raise ValueError("MAIL_PASSWORD must be configured in production")
+            if self.SUPER_ADMIN_PASSWORD == "change-this-immediately":
+                raise ValueError("SUPER_ADMIN_PASSWORD must be changed in production")
         return self
 
 

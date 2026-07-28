@@ -88,6 +88,6 @@ def decode_access_token(token: str) -> TokenPayload:
 
 
 def create_verification_token() -> tuple[str, str]:
-    raw = secrets.token_urlsafe(32)
+    raw = f"{secrets.randbelow(1_000_000):06d}"
     token_hash = hashlib.sha256(raw.encode()).hexdigest()
     return raw, token_hash

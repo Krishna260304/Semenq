@@ -3,13 +3,11 @@ import { cn } from "@/lib/utils";
 import {
   Search, Upload, BookMarked, ShoppingBag, User, LayoutDashboard,
   Package, CalendarCheck, TrendingUp, BarChart3, Users, Building2,
-  Pill, Shield, Bell, LogOut, ChevronRight, Activity, Zap
+  Pill, LogOut, Activity, Zap
 } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 
 interface SidebarProps {
   role: "patient" | "pharmacy" | "admin";
-  unreadCount?: number;
 }
 
 const patientLinks = [
@@ -27,6 +25,7 @@ const pharmacyLinks = [
   { href: "/pharmacy/reservations", label: "Reservations", icon: CalendarCheck },
   { href: "/pharmacy/demand", label: "Demand Forecast", icon: Zap, badge: "AI" },
   { href: "/pharmacy/analytics", label: "Analytics", icon: BarChart3 },
+  { href: "/pharmacy/profile", label: "Profile", icon: User },
 ];
 
 const adminLinks = [
@@ -36,7 +35,7 @@ const adminLinks = [
   { href: "/admin/medicines", label: "Medicines", icon: Pill },
 ];
 
-export function AppSidebar({ role, unreadCount = 0 }: SidebarProps) {
+export function AppSidebar({ role }: SidebarProps) {
   const [location] = useLocation();
 
   const links = role === "patient" ? patientLinks : role === "pharmacy" ? pharmacyLinks : adminLinks;
@@ -81,17 +80,6 @@ export function AppSidebar({ role, unreadCount = 0 }: SidebarProps) {
       </nav>
 
       <div className="px-3 py-4 border-t border-sidebar-border space-y-1">
-        <Link href="/notifications">
-          <div className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-all cursor-pointer">
-            <Bell className="w-4 h-4 text-sidebar-foreground/70" />
-            <span className="flex-1">Notifications</span>
-            {unreadCount > 0 && (
-              <span className="px-1.5 py-0.5 text-xs font-bold bg-destructive text-white rounded-full min-w-[20px] text-center">
-                {unreadCount}
-              </span>
-            )}
-          </div>
-        </Link>
         <Link href="/">
           <div className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-all cursor-pointer">
             <LogOut className="w-4 h-4 text-sidebar-foreground/70" />

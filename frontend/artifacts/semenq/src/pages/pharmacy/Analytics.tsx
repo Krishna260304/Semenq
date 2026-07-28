@@ -10,6 +10,7 @@ export default function PharmacyAnalytics() {
   const { data: profile } = useGetMyProfile();
   const { data: dashboard } = useGetPharmacyDashboard();
   const { data: topData } = useGetTopMedicines({ limit: 5 });
+  const liveDashboard = (dashboard as any) || {};
   const revenueData = (dashboard as any)?.revenueByDay ?? [];
   const topMedicines = (Array.isArray(topData) ? topData : []) as any[];
   const categoryData = Object.entries((Array.isArray(topData) ? topData : []).reduce<Record<string, number>>((acc, item: any) => {
@@ -17,6 +18,12 @@ export default function PharmacyAnalytics() {
     acc[key] = (acc[key] || 0) + 1;
     return acc;
   }, {})).map(([name, value]) => ({ name, value }));
+  const analyticsStats = [
+    ["Total Revenue", `₹${((liveDashboard.monthlyRevenue || 0) / 100000).toFixed(1)}L`, "Live total", "text-muted-foreground"],
+    ["Total Orders", "—", "Unavailable", "text-muted-foreground"],
+    ["Avg Order Value", "—", "Unavailable", "text-muted-foreground"],
+    ["New Customers", "—", "Unavailable", "text-muted-foreground"],
+  ];
 
   return (
     <PharmacyLayout>
@@ -24,11 +31,11 @@ export default function PharmacyAnalytics() {
 
       <div className="p-6 max-w-6xl space-y-6">
         <div className="grid grid-cols-4 gap-4">
-          {[["Total Revenue", "₹3.43L", "+11.2%", "text-success"], ["Total Orders", "482", "+8.4%", "text-success"], ["Avg Order Value", "₹711", "+2.6%", "text-success"], ["New Customers", "38", "+5.1%", "text-success"]].map(([label, val, change, col]) => (
+          {analyticsStats.map(([label, val, change, col]) => (
             <div key={label} className="bg-card border border-card-border rounded-[20px] p-4">
               <p className="text-xs text-muted-foreground font-medium mb-1">{label}</p>
               <p className="text-2xl font-bold text-foreground">{val}</p>
-              <p className={`text-xs font-medium mt-0.5 ${col}`}>{change} vs last month</p>
+              <p className={`text-xs font-medium mt-0.5 ${col}`}>{change}</p>
             </div>
           ))}
         </div>

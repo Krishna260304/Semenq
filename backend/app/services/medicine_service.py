@@ -40,6 +40,7 @@ from app.repositories.medicine_repository import (
     MedicineInventoryRepository,
     MedicineRepository,
 )
+from app.services.medicine_matching import build_medicine_queries, normalize_medicine_text
 
 logger = get_logger(__name__)
 
@@ -53,16 +54,27 @@ def _slugify(text: str) -> str:
 
 
 def _build_search_keywords(medicine: Medicine) -> list[str]:
-    raw = " ".join(filter(None, [
-        medicine.name,
-        medicine.generic_name,
-        medicine.brand_name,
-        medicine.composition,
-        medicine.manufacturer,
-        medicine.category_name,
-    ]))
-    words = {w.lower() for w in re.split(r"[\s,+\-/]+", raw) if len(w) > 2}
-    return sorted(words)
+    raw = " ".join(
+        filter(
+            None,
+            [
+                medicine.name,
+                medicine.generic_name,
+                medicine.brand_name,
+                medicine.composition,
+                medicine.manufacturer,
+                medicine.category_name,
+                medicine.strength,
+            ],
+        )
+    )
+    keywords = build_medicine_queries(raw, max_queries=25)
+    words = set()
+    for keyword in keywords:
+        normalized = normalize_medicine_text(keyword)
+        if normalized:
+            words.update(normalized.split())
+    return sorted(word for word in words if len(word) > 1)
 
 
 class MedicineService:

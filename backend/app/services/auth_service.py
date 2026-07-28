@@ -45,6 +45,8 @@ from app.repositories.user_repository import (
     UserRepository,
     VerificationTokenRepository,
 )
+from app.providers.notifications.providers import SMTPEmailProvider
+from app.security.firebase_auth import create_firebase_custom_token, get_or_create_firebase_user
 from app.security.jwt_handler import (
     create_access_token,
     create_refresh_token,
@@ -86,6 +88,7 @@ class AuthService:
         self._password_reset_tokens = PasswordResetTokenRepository()
         self._prefs = UserPreferencesRepository()
         self._audit = AuditLogRepository()
+        self._email = SMTPEmailProvider()
 
 
     async def register_patient(
@@ -285,6 +288,25 @@ class AuthService:
             new_hash = hash_password(password)
             await self._users.update_password_hash(user.id, new_hash)
 
+        firebase_custom_token = None
+        try:
+            firebase_user = get_or_create_firebase_user(
+                uid=user.id,
+                email=user.email,
+                display_name=user.full_name,
+                email_verified=user.email_verified,
+            )
+            firebase_custom_token = create_firebase_custom_token(
+                firebase_user.uid,
+                {
+                    "semenq_user_id": user.id,
+                    "semenq_role": user.role.value,
+                    "semenq_email": user.email,
+                },
+            )
+        except Exception as exc:
+            logger.warning("Unable to mint Firebase custom token for password login", user_id=user.id, error=str(exc))
+
         session = Session(
             user_id=user.id,
             ip_address=ip_address,
@@ -332,6 +354,7 @@ class AuthService:
             "role": user.role.value,
             "email": user.email,
             "full_name": user.full_name,
+            "firebase_custom_token": firebase_custom_token,
         }
 
     async def login_with_firebase(
@@ -436,6 +459,122 @@ class AuthService:
             "full_name": user.full_name,
         }
 
+    async def request_support_otp(
+        self,
+        email: str,
+        purpose: str = "login",
+        role: str | None = None,
+        ip_address: str = "",
+    ) -> str:
+        email = email.lower().strip()
+        user = await self._users.get_by_email(email)
+        if user is None:
+            raise UserNotFoundException("No account found with that email.")
+
+        if role and getattr(user.role, "value", str(user.role)) != role:
+            raise AuthenticationException(f"This account is registered as {user.role.value}.")
+
+        if purpose == "login":
+            token_type = TokenType.LOGIN_OTP
+            subject = "Semenq 6-digit login verification code"
+            purpose_label = "login"
+            recipient_email = user.email
+        elif purpose == "two_factor":
+            token_type = TokenType.TWO_FACTOR_OTP
+            subject = "Semenq 6-digit two-factor verification code"
+            purpose_label = "two-factor authentication"
+            recipient_email = user.email
+        elif purpose == "email_2fa":
+            token_type = TokenType.TWO_FACTOR_OTP
+            subject = "Semenq 6-digit email verification code"
+            purpose_label = "email two-factor authentication"
+            recipient_email = user.email
+        else:
+            raise AuthenticationException("Unsupported OTP purpose.")
+
+        raw_token, token_hash, expiry = self._generate_support_otp_token()
+        verification = VerificationToken(
+            user_id=user.id,
+            token_hash=token_hash,
+            token_type=token_type,
+            expires_at=expiry,
+            ip_address=ip_address,
+        )
+        await verification.insert()
+
+        body = f"""
+        <html>
+            <body style="font-family: Arial, sans-serif; color: #111827;">
+                <h2>{subject}</h2>
+                <p>An OTP was requested for <strong>{user.full_name}</strong> ({user.email}).</p>
+                <p>Purpose: <strong>{purpose_label}</strong></p>
+                <p>6-digit code: <strong style="font-size: 1.4rem; letter-spacing: 0.2em;">{raw_token}</strong></p>
+                <p>This code expires in 10 minutes.</p>
+            </body>
+        </html>
+        """
+
+        sent = await self._email.send(
+            to=recipient_email,
+            subject=subject,
+            html_body=body,
+        )
+        if not sent:
+            verification.used = True
+            verification.used_at = _utcnow()
+            await verification.save()
+            raise AuthenticationException("Could not send the OTP email.")
+
+        await self._audit.log(
+            action="user.support_otp_requested",
+            module="auth",
+            user_id=user.id,
+            role=getattr(user.role, "value", str(user.role)),
+            ip_address=ip_address,
+            result="success",
+            metadata={"purpose": purpose, "recipient_email": recipient_email},
+        )
+        return recipient_email
+
+    async def verify_support_otp(
+        self,
+        email: str,
+        raw_token: str,
+        purpose: str = "login",
+        role: str | None = None,
+        ip_address: str = "",
+    ) -> User:
+        email = email.lower().strip()
+        user = await self._users.get_by_email(email)
+        if user is None:
+            raise UserNotFoundException("No account found with that email.")
+
+        if role and getattr(user.role, "value", str(user.role)) != role:
+            raise AuthenticationException(f"This account is registered as {user.role.value}.")
+
+        if purpose == "login":
+            token_type = TokenType.LOGIN_OTP
+        elif purpose in {"two_factor", "email_2fa"}:
+            token_type = TokenType.TWO_FACTOR_OTP
+        else:
+            raise AuthenticationException("Unsupported OTP purpose.")
+
+        token_record = await self._verification_tokens.get_valid_token(raw_token, token_type)
+        if token_record is None or token_record.user_id != user.id:
+            raise InvalidTokenException("OTP is invalid or expired.")
+
+        await self._verification_tokens.mark_used(token_record.id)
+        await self._audit.log(
+            action="user.support_otp_verified",
+            module="auth",
+            user_id=user.id,
+            role=getattr(user.role, "value", str(user.role)),
+            ip_address=ip_address,
+            result="success",
+            metadata={"purpose": purpose},
+        )
+        return user
+
 
     async def refresh_access_token(
         self,
@@ -495,6 +634,43 @@ class AuthService:
         await self._refresh_tokens.revoke_all_for_user(user_id, "logout_all")
         await self._sessions.revoke_all_for_user(user_id)
         await self._audit.log(action="user.logout_all", module="auth", user_id=user_id)
+
+    async def get_active_sessions(self, user_id: str) -> list[Session]:
+        """Return the user's active sessions without exposing refresh tokens."""
+        return await self._sessions.get_active_sessions(user_id)
+
+    async def revoke_session(self, session_id: str, user_id: str) -> bool:
+        """Revoke one of the current user's sessions."""
+        session = await Session.find_one(
+            Session.id == session_id,
+            Session.user_id == user_id,
+            Session.status == SessionStatus.ACTIVE,
+        )
+        if not session:
+            return False
+
+        if session.refresh_token_id:
+            await self._refresh_tokens.revoke_token(session.refresh_token_id, "session_revoked")
+        session.status = SessionStatus.REVOKED
+        session.logout_at = _utcnow()
+        await session.save()
+        await self._audit.log(
+            action="user.session_revoked",
+            module="auth",
+            user_id=user_id,
+            entity_id=session.id,
+            entity_type="session",
+        )
+        return True
+
+    async def delete_account(self, user_id: str) -> None:
+        """Disable an account while retaining required order/audit records."""
+        user = await self._users.get_by_id_or_raise(user_id)
+        await self._refresh_tokens.revoke_all_for_user(user_id, "account_deleted")
+        await self._sessions.revoke_all_for_user(user_id)
+        user.status = UserStatus.INACTIVE
+        await user.soft_delete(deleted_by=user_id)
+        await self._audit.log(action="user.account_deleted", module="auth", user_id=user_id)
 
 
     async def verify_email(self, raw_token: str, ip_address: str = "") -> User:
@@ -558,6 +734,11 @@ class AuthService:
         )
         return raw_token
 
+    async def verify_password_reset_token(self, raw_token: str) -> None:
+        token_record = await self._password_reset_tokens.get_valid_token(raw_token)
+        if token_record is None:
+            raise InvalidTokenException("Password reset token is invalid or expired.")
+
     async def reset_password(
         self,
         raw_token: str,
@@ -587,6 +768,12 @@ class AuthService:
     def _generate_email_verification_token() -> tuple[str, str, datetime]:
         raw, token_hash = create_verification_token()
         expiry = _utcnow() + timedelta(hours=24)
+        return raw, token_hash, expiry
+
+    @staticmethod
+    def _generate_support_otp_token() -> tuple[str, str, datetime]:
+        raw, token_hash = create_verification_token()
+        expiry = _utcnow() + timedelta(minutes=10)
         return raw, token_hash, expiry
 
     async def get_current_user(self, user_id: str) -> User:

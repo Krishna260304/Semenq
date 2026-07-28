@@ -5,12 +5,13 @@ import { Search, MapPin, Filter, SlidersHorizontal, ChevronDown, ArrowRight, Sta
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { StockBadge } from "@/components/StockBadge";
+import { PharmacyMap } from "@/components/PharmacyMap";
 import { Link } from "wouter";
 import { useSearchMedicines, useGetSearchSuggestions } from "@workspace/api-client-react";
 
 const expansionLevels = ["nearby", "city", "district", "state", "national"] as const;
 const expansionLabels: Record<string, string> = {
-  nearby: "Nearby (2 km)", city: "Mumbai City", district: "Mumbai District", state: "Maharashtra", national: "All India"
+  nearby: "Nearby", city: "City", district: "District", state: "State", national: "National"
 };
 
 const sortOptions = [
@@ -20,7 +21,7 @@ const sortOptions = [
   { value: "fastest", label: "Fastest Delivery" },
 ];
 
-function MapPlaceholder({ markers }: { markers: any[] }) {
+function _UnusedMapPlaceholder({ markers }: { markers: any[] }) {
   const statusColors: Record<string, string> = { available: "#10B981", limited: "#F59E0B", outOfStock: "#EF4444", courier: "#7C3AED" };
   return (
     <div className="relative w-full h-full bg-[#e8f0fe] rounded-2xl overflow-hidden">
@@ -92,17 +93,24 @@ export default function MedicineSearch() {
   const { data: suggestionData } = useGetSearchSuggestions({ q: query }, { query: { enabled: query.length > 1, queryKey: ["searchSuggestions", query] } });
   const suggestions = (Array.isArray(suggestionData) ? suggestionData : []) as any[];
   const markers = (results as any)?.mapMarkers || [];
+  const pharmacyMarkers = markers
+    .filter((marker: any) => Number.isFinite(Number(marker.latitude)) && Number.isFinite(Number(marker.longitude)))
+    .map((marker: any) => ({
+      id: String(marker.pharmacyId || marker.pharmacy_id),
+      name: marker.pharmacyName || marker.pharmacy_name || "Pharmacy",
+      latitude: Number(marker.latitude),
+      longitude: Number(marker.longitude),
+      address: marker.address,
+      distance_km: marker.distance,
+      medicines: marker.medicines,
+    }));
 
   const doSearch = async (q: string) => {
     if (!q.trim()) return;
     setSearching(true);
     setSearched(q);
     setShowSuggestions(false);
-    for (let i = 0; i < expansionLevels.length; i++) {
-      await new Promise(r => setTimeout(r, 600));
-      setExpansionIdx(i + 1);
-      if (i === 1) break;
-    }
+    setExpansionIdx(1);
     setSearching(false);
   };
 
@@ -219,7 +227,7 @@ export default function MedicineSearch() {
             </div>
 
             <div className="flex-1 p-4">
-              <MapPlaceholder markers={markers} />
+              <PharmacyMap className="h-full rounded-2xl" pharmacies={pharmacyMarkers} />
             </div>
           </div>
         ) : (
@@ -229,14 +237,7 @@ export default function MedicineSearch() {
                 <Search className="w-10 h-10 text-primary" />
               </div>
               <h2 className="text-xl font-bold text-foreground mb-2">Search for any medicine</h2>
-              <p className="text-muted-foreground text-sm mb-6">Type a medicine name, composition, or brand to search across 18,000+ pharmacies nationwide.</p>
-              <div className="flex flex-wrap gap-2 justify-center">
-                {["Metformin", "Paracetamol", "Amoxicillin", "Atorvastatin"].map(med => (
-                  <button key={med} onClick={() => { setQuery(med); doSearch(med); }} className="px-3 py-1.5 rounded-full bg-muted text-sm text-muted-foreground hover:bg-primary/10 hover:text-primary transition-colors">
-                    {med}
-                  </button>
-                ))}
-              </div>
+              <p className="text-muted-foreground text-sm mb-6">Search the live medicine catalog and nearby pharmacy inventory.</p>
             </div>
           </div>
         )}

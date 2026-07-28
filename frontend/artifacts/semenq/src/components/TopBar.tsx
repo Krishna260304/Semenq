@@ -1,7 +1,7 @@
-import { Bell, Search, ChevronDown } from "lucide-react";
+import { Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
-import { useListNotifications } from "@workspace/api-client-react";
+import { useAuth } from "@/lib/auth-context";
 
 interface TopBarProps {
   title: string;
@@ -10,8 +10,11 @@ interface TopBarProps {
 }
 
 export function TopBar({ title, subtitle, userName }: TopBarProps) {
-  const { data: notifications } = useListNotifications({ unreadOnly: true });
-  const unreadCount = Array.isArray(notifications) ? notifications.filter((n: any) => !n.isRead).length : 0;
+  const { user, loading } = useAuth();
+  const placeholderNames = new Set(["Guest", "User", "Patient", "Pharmacy", "Account"]);
+  const resolvedName = userName && !placeholderNames.has(userName)
+    ? userName
+    : user?.displayName || user?.email?.split("@")[0] || "";
 
   return (
     <header className="sticky top-0 z-30 bg-background/80 backdrop-blur-sm border-b border-border px-6 py-4 flex items-center justify-between">
@@ -26,20 +29,12 @@ export function TopBar({ title, subtitle, userName }: TopBarProps) {
             <span className="hidden sm:inline text-muted-foreground">Search medicines...</span>
           </Button>
         </Link>
-        <Button variant="ghost" size="sm" className="relative rounded-full w-9 h-9 p-0">
-          <Bell className="w-4 h-4" />
-          {unreadCount > 0 && (
-            <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-destructive text-white text-[10px] font-bold rounded-full flex items-center justify-center">
-              {unreadCount}
-            </span>
-          )}
-        </Button>
-        {userName && (
+        {!loading && resolvedName && (
           <div className="flex items-center gap-2 pl-2 border-l border-border">
             <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-              <span className="text-xs font-bold text-primary">{userName[0]}</span>
+              <span className="text-xs font-bold text-primary">{resolvedName[0].toUpperCase()}</span>
             </div>
-            <span className="text-sm font-medium text-foreground hidden sm:block">{userName.split(" ")[0]}</span>
+            <span className="text-sm font-medium text-foreground hidden sm:block">{resolvedName.split(" ")[0]}</span>
           </div>
         )}
       </div>

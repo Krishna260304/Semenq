@@ -7,6 +7,7 @@ from typing import AsyncGenerator
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from app.core.config import get_settings
 from app.core.database.connection import disconnect_database, connect_database
@@ -16,7 +17,7 @@ from app.core.logging.logger import get_logger
 from app.core.middleware.logging_middleware import LoggingMiddleware
 from app.core.middleware.request_id import RequestIDMiddleware
 
-from app.routes import auth, health, medicine, inventory, reservation, prescription, payment, order, analytics, users, notifications, realtime
+from app.routes import auth, health, medicine, inventory, reservation, prescription, payment, order, analytics, users, notifications, pharmacies, realtime
 
 logger = get_logger(__name__)
 
@@ -63,14 +64,26 @@ def create_app() -> FastAPI:
 
     app.add_middleware(RequestIDMiddleware)
     app.add_middleware(LoggingMiddleware)
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.ALLOWED_HOSTS)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.CORS_ORIGINS,
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
+        allow_credentials=settings.CORS_ALLOW_CREDENTIALS,
+        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+        allow_headers=["Authorization", "Content-Type", "Accept", "X-Request-ID"],
         expose_headers=["X-Request-ID"],
     )
+
+    @app.middleware("http")
+    async def security_headers(request: Request, call_next):
+        response = await call_next(request)
+        response.headers.setdefault("X-Content-Type-Options", "nosniff")
+        response.headers.setdefault("X-Frame-Options", "DENY")
+        response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+        response.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=(self)")
+        if settings.is_production:
+            response.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+        return response
 
     register_exception_handlers(app)
 
@@ -86,6 +99,7 @@ def create_app() -> FastAPI:
     app.include_router(analytics.router, prefix=api_prefix)
     app.include_router(users.router, prefix=api_prefix)
     app.include_router(notifications.router, prefix=api_prefix)
+    app.include_router(pharmacies.router, prefix=api_prefix)
     app.include_router(realtime.router, prefix=api_prefix)
 
     return app

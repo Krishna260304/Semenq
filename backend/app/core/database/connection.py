@@ -127,7 +127,7 @@ async def connect_database() -> None:
     global _client, _database
     settings = get_settings()
 
-    logger.info("Connecting to MongoDB", url=settings.MONGODB_URL, db=settings.MONGODB_DB_NAME)
+    logger.info("Connecting to MongoDB", db=settings.MONGODB_DB_NAME)
 
     _client = AsyncIOMotorClient(
         settings.MONGODB_URL,

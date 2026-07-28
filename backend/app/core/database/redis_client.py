@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import Any
-
 import redis.asyncio as aioredis
 
 from app.core.config import get_settings
@@ -12,28 +10,41 @@ logger = get_logger(__name__)
 _redis_client: aioredis.Redis | None = None
 
 
-async def connect_redis() -> None:
+async def connect_redis(max_retries: int = 3, retry_delay: float = 1.0) -> None:
     global _redis_client
     settings = get_settings()
 
+    # Redis is an optional cache for local development. Do not hold the API
+    # startup hostage for several retry cycles when the service is not running.
+    if settings.is_development:
+        max_retries = 1
+        retry_delay = 0
+
     logger.info("Connecting to Redis", url=settings.REDIS_URL)
-    try:
-        _redis_client = aioredis.from_url(
-            settings.REDIS_URL,
-            max_connections=settings.REDIS_MAX_CONNECTIONS,
-            encoding="utf-8",
-            decode_responses=True,
-        )
-        await _redis_client.ping()
-        logger.info("Redis connected successfully")
-    except Exception as exc:
-        if _redis_client is not None:
-            try:
-                await _redis_client.aclose()
-            except Exception:
-                pass
-        _redis_client = None
-        logger.warning("Redis unavailable; the app will continue without caching", error=str(exc))
+
+    for attempt in range(1, max_retries + 1):
+        try:
+            client = aioredis.from_url(
+                settings.REDIS_URL,
+                max_connections=settings.REDIS_MAX_CONNECTIONS,
+                encoding="utf-8",
+                decode_responses=True,
+            )
+            await client.ping()
+            _redis_client = client
+            logger.info("Redis connected successfully", attempt=attempt)
+            return
+        except Exception as exc:
+            logger.info(
+                f"Redis connection attempt {attempt}/{max_retries} failed",
+                error=str(exc),
+            )
+            if attempt < max_retries:
+                import asyncio
+                await asyncio.sleep(retry_delay)
+
+    _redis_client = None
+    logger.info("Redis unavailable; continuing without caching")
 
 
 async def disconnect_redis() -> None:
@@ -96,10 +107,16 @@ async def cache_delete_pattern(pattern: str) -> int:
     if _redis_client is None:
         return 0
     try:
-        keys = await _redis_client.keys(pattern)
-        if keys:
-            return await _redis_client.delete(*keys)
-        return 0
+        deleted = 0
+        batch: list[str] = []
+        async for key in _redis_client.scan_iter(match=pattern, count=500):
+            batch.append(key)
+            if len(batch) >= 500:
+                deleted += await _redis_client.delete(*batch)
+                batch.clear()
+        if batch:
+            deleted += await _redis_client.delete(*batch)
+        return deleted
     except Exception as exc:
         logger.warning("cache_delete_pattern failed", pattern=pattern, error=str(exc))
         return 0

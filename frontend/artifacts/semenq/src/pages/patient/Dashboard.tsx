@@ -9,8 +9,19 @@ import {
   AlertTriangle, ArrowRight, Package, TrendingUp, ChevronRight
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useGetPatientDashboard } from "@workspace/api-client-react";
-import { useGetMyProfile } from "@workspace/api-client-react";
+import { useQuery } from "@tanstack/react-query";
+import { auth } from "@/lib/firebase";
+import { useAuth } from "@/lib/auth-context";
+
+async function apiFetch(path: string) {
+  const user = auth.currentUser;
+  const token = user ? await user.getIdToken() : null;
+  const headers: Record<string, string> = {};
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+  const res = await fetch(path, { headers });
+  if (!res.ok) throw new Error(`API ${res.status}`);
+  return res.json();
+}
 
 const quickActions = [
   { href: "/patient/search", icon: Search, label: "Find Medicines", desc: "Search across India", color: "bg-primary text-white" },
@@ -56,9 +67,11 @@ function ExpiresIn({ dateStr }: { dateStr: string }) {
 }
 
 export default function PatientDashboard() {
-  const { data: profile } = useGetMyProfile();
-  const { data, isLoading } = useGetPatientDashboard();
-  const dashboard = (data as any) || {
+  const { user, loading: authLoading } = useAuth();
+  const { data: profileData } = useQuery({ queryKey: ["my-profile"], queryFn: () => apiFetch("/api/users/me"), enabled: !authLoading && !!user, retry: 1 });
+  const { data: dashboardData, isLoading } = useQuery({ queryKey: ["patient-dashboard"], queryFn: () => apiFetch("/api/users/me/dashboard"), enabled: !authLoading && !!user, retry: 1 });
+  const profile = (profileData as any)?.data;
+  const dashboard = (dashboardData as any)?.data || {
     pendingReservations: 0,
     activeOrders: 0,
     totalOrders: 0,
@@ -70,7 +83,7 @@ export default function PatientDashboard() {
 
   return (
     <PatientLayout>
-      <TopBar title={`${greeting}, ${(profile as any)?.name?.split(" ")[0] || "Guest"}`} subtitle={new Date().toLocaleDateString("en-IN", { weekday: "long", year: "numeric", month: "long", day: "numeric" })} userName={(profile as any)?.name || "Guest"} />
+      <TopBar title={`${greeting}, ${profile?.name?.split(" ")[0] || user?.displayName?.split(" ")[0] || user?.email?.split("@")[0] || "Account"}`} subtitle={new Date().toLocaleDateString("en-IN", { weekday: "long", year: "numeric", month: "long", day: "numeric" })} userName={profile?.name || user?.displayName || user?.email?.split("@")[0] || "Account"} />
 
       <div className="p-6 space-y-6 max-w-6xl">
         <div className="grid grid-cols-3 gap-4">

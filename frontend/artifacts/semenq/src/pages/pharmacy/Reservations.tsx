@@ -4,7 +4,9 @@ import { PharmacyLayout } from "@/layouts/PharmacyLayout";
 import { TopBar } from "@/components/TopBar";
 import { CheckCircle2, XCircle, Clock, Truck, MapPin, QrCode } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useListReservations, useUpdateReservation } from "@workspace/api-client-react";
+import { useQuery } from "@tanstack/react-query";
+import { useUpdateReservation } from "@workspace/api-client-react";
+import { auth } from "@/lib/firebase";
 import { toast } from "sonner";
 import { QRCode } from "@/components/QRCode";
 
@@ -21,8 +23,24 @@ const tabs = ["All", "Pending", "Confirmed", "Ready", "Cancelled"];
 export default function PharmacyReservations() {
   const [activeTab, setActiveTab] = useState("All");
   const [showQR, setShowQR] = useState<number | null>(null);
-  const { data, isLoading, refetch } = useListReservations({ pharmacyId: 2 });
-  const reservations = (Array.isArray(data) ? data : []) as any[];
+  const { data, isLoading, refetch } = useQuery({
+    queryKey: ["pharmacy-reservations"],
+    queryFn: async () => {
+      const token = await auth.currentUser?.getIdToken();
+      const response = await fetch("/api/reservations/pharmacy", { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+      if (!response.ok) throw new Error("Unable to load reservations.");
+      return response.json();
+    },
+  });
+  const reservations = (((data as any)?.data || []) as any[]).map(item => ({
+    ...item,
+    medicineName: item.medicineName || item.medicine_name || "Reservation",
+    quantity: item.quantity ?? item.medicine_count ?? 0,
+    totalAmount: item.totalAmount ?? item.grand_total ?? 0,
+    deliveryType: item.deliveryType || item.pickup_method || "pickup",
+    expiresAt: item.expiresAt || item.expires_at,
+    prescriptionId: item.prescriptionId || item.prescription_id,
+  }));
   const updateReservation = useUpdateReservation();
 
   const handleAction = async (id: number, status: "confirmed" | "cancelled" | "ready") => {
@@ -30,8 +48,8 @@ export default function PharmacyReservations() {
       await updateReservation.mutateAsync({ id, data: { status } });
       await refetch();
       toast.success(`Reservation ${status === "confirmed" ? "approved" : status === "ready" ? "marked ready" : "rejected"}`);
-    } catch {
-      toast.success(`Reservation ${status}`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Unable to update reservation.");
     }
   };
 

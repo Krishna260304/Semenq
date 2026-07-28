@@ -1,31 +1,75 @@
 from __future__ import annotations
 
 import asyncio
-import io
+import base64
+import json
+import os
+import subprocess
+import sys
+import threading
 import time
-from typing import Any
-
-import numpy as np
-from PIL import Image
+from pathlib import Path
 
 from app.core.exceptions import OCRException
 from app.core.logging.logger import get_logger
 from app.providers.ocr.base import BaseOCRProvider, OCRResult
 
 logger = get_logger(__name__)
-_reader = None  # Lazy-loaded PaddleOCR reader
+_worker: subprocess.Popen[str] | None = None
+_worker_ready = False
+_worker_lock = threading.Lock()
 
 
-def _get_reader() -> Any:
-    global _reader
-    if _reader is None:
-        try:
-            from paddleocr import PaddleOCR
+def _stop_worker() -> None:
+    global _worker, _worker_ready
+    if _worker is None:
+        return
+    _worker.terminate()
+    try:
+        _worker.wait(timeout=3)
+    except subprocess.TimeoutExpired:
+        _worker.kill()
+    _worker = None
+    _worker_ready = False
 
-            _reader = PaddleOCR(lang="en", use_angle_cls=True, enable_mkldnn=False, use_gpu=False, show_log=False)
-        except Exception as exc:
-            raise OCRException(f"PaddleOCR initialization failed: {exc}")
-    return _reader
+
+def _get_worker() -> subprocess.Popen[str]:
+    global _worker, _worker_ready
+    if _worker is not None and _worker.poll() is None and _worker_ready:
+        return _worker
+
+    _stop_worker()
+
+    backend_root = Path(__file__).resolve().parents[3]
+    creation_flags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
+    _worker = subprocess.Popen(
+        [sys.executable, "-m", "app.providers.ocr.paddleocr_worker"],
+        cwd=backend_root,
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=None,
+        text=True,
+        bufsize=1,
+        creationflags=creation_flags,
+    )
+    if _worker.stdout is None:
+        _stop_worker()
+        raise OCRException("PaddleOCR GPU worker did not provide a startup pipe.")
+    startup_line = _worker.stdout.readline()
+    if not startup_line:
+        _stop_worker()
+        raise OCRException("PaddleOCR GPU worker exited during startup.")
+    try:
+        startup = json.loads(startup_line)
+    except json.JSONDecodeError as exc:
+        _stop_worker()
+        raise OCRException("PaddleOCR GPU worker returned an invalid startup response.") from exc
+    if not startup.get("ready"):
+        error = startup.get("error", "unknown startup error")
+        _stop_worker()
+        raise OCRException(f"PaddleOCR GPU worker startup failed: {error}")
+    _worker_ready = True
+    return _worker
 
 
 class PaddleOCRProvider(BaseOCRProvider):
@@ -34,64 +78,50 @@ class PaddleOCRProvider(BaseOCRProvider):
         return "paddleocr"
 
     async def extract_text(self, image_bytes: bytes, mime_type: str = "image/jpeg") -> OCRResult:
+        del mime_type
         start = time.perf_counter()
         try:
-            result = await asyncio.get_event_loop().run_in_executor(
-                None, self._run_ocr, image_bytes
-            )
-            elapsed_ms = int((time.perf_counter() - start) * 1000)
-            result.execution_time_ms = elapsed_ms
+            result = await asyncio.get_event_loop().run_in_executor(None, self._run_ocr, image_bytes)
+            result.execution_time_ms = int((time.perf_counter() - start) * 1000)
             result.provider = self.provider_name
             return result
         except OCRException:
             raise
         except Exception as exc:
             logger.error("PaddleOCR extraction failed", error=str(exc))
-            raise OCRException(f"PaddleOCR failed: {exc}")
+            raise OCRException(f"PaddleOCR failed: {exc}") from exc
 
     def _run_ocr(self, image_bytes: bytes) -> OCRResult:
-        reader = _get_reader()
-        image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
-        img_array = np.array(image)
+        with _worker_lock:
+            request = {"image": base64.b64encode(image_bytes).decode("ascii")}
+            for attempt in range(2):
+                worker = _get_worker()
+                if worker.stdin is None or worker.stdout is None:
+                    _stop_worker()
+                    raise OCRException("PaddleOCR GPU worker could not open its communication pipes.")
+                try:
+                    worker.stdin.write(json.dumps(request) + "\n")
+                    worker.stdin.flush()
+                    line = worker.stdout.readline()
+                    if not line:
+                        raise BrokenPipeError("worker exited before returning a result")
+                    payload = json.loads(line)
+                    break
+                except (BrokenPipeError, OSError, json.JSONDecodeError) as exc:
+                    _stop_worker()
+                    if attempt == 1:
+                        raise OCRException(f"PaddleOCR worker communication failed: {exc}") from exc
 
-        detections = reader.ocr(img_array, cls=True)
-
-        lines = []
-        boxes = []
-        total_confidence = 0.0
-
-        for result in detections:
-            if not result:
-                continue
-
-            if len(result) == 2 and isinstance(result[1], (list, tuple)):
-                bbox, text_info = result
-            else:
-                continue
-
-            text = str(text_info[0]) if len(text_info) > 0 else ""
-            confidence = float(text_info[1]) if len(text_info) > 1 else 0.0
-
-            lines.append(text)
-            total_confidence += confidence
-            boxes.append({
-                "text": text,
-                "confidence": round(confidence, 4),
-                "bbox": [[int(point[0]), int(point[1])] for point in bbox],
-            })
-
-        avg_confidence = (total_confidence / len(boxes)) if boxes else 0.0
-        raw_text = "\n".join(lines)
-
-        return OCRResult(
-            raw_text=raw_text,
-            confidence=round(avg_confidence, 4),
-            bounding_boxes=boxes,
-        )
+        if not payload.get("ok"):
+            raise OCRException(payload.get("error", "PaddleOCR GPU worker failed."))
+        return OCRResult(**payload["result"])
 
     async def health_check(self) -> bool:
+        # Starting the worker validates PaddlePaddle's CUDA runtime without
+        # importing it into the API process.
         try:
-            _get_reader()
+            with _worker_lock:
+                _get_worker()
             return True
         except Exception:
             return False

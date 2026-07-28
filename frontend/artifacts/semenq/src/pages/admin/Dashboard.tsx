@@ -110,8 +110,8 @@ export default function AdminDashboard() {
         <div className="grid lg:grid-cols-[1fr_380px] gap-6">
           <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }} className="bg-card border border-card-border rounded-[24px] p-6">
             <div className="flex items-center justify-between mb-5">
-              <h2 className="font-semibold text-foreground">Revenue Growth (2025)</h2>
-              <p className="text-2xl font-bold text-foreground">₹{(d.monthlyRevenue / 100000).toFixed(1)}L <span className="text-success text-sm font-normal">+31%</span></p>
+              <h2 className="font-semibold text-foreground">Revenue Growth</h2>
+              <p className="text-2xl font-bold text-foreground">₹{(d.monthlyRevenue / 100000).toFixed(1)}L</p>
             </div>
             <ResponsiveContainer width="100%" height={180}>
               <AreaChart data={d.userGrowth}>
@@ -155,7 +155,7 @@ export default function AdminDashboard() {
         <div className="grid grid-cols-3 gap-4">
           {[
             { label: "Active Reservations", value: d.activeReservations.toLocaleString("en-IN"), icon: Clock, color: "text-primary", sub: "Right now" },
-            { label: "Monthly Revenue", value: `₹${(d.monthlyRevenue / 100000).toFixed(1)}L`, icon: TrendingUp, color: "text-success", sub: "+31% YoY" },
+            { label: "Monthly Revenue", value: `₹${(d.monthlyRevenue / 100000).toFixed(1)}L`, icon: TrendingUp, color: "text-success", sub: "Live total" },
             { label: "Pending Verifications", value: d.pendingVerifications, icon: AlertTriangle, color: "text-warning", sub: "Pharmacies awaiting review" },
           ].map((m, i) => {
             const Icon = m.icon;

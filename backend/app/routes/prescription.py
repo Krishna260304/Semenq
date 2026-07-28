@@ -15,6 +15,20 @@ router = APIRouter(prefix="/prescriptions", tags=["Prescriptions"])
 _prescription_service = PrescriptionService()
 
 
+@router.get("", response_model=APIResponse[list[dict]], summary="List patient prescriptions")
+async def list_prescriptions(user: User = Depends(require_patient)) -> APIResponse:
+    from app.models.prescription import Prescription
+
+    prescriptions = await Prescription.find(
+        Prescription.patient_id == user.id
+    ).sort([("created_at", -1)]).to_list()
+    return APIResponse.ok(
+        data=[item.model_dump() for item in prescriptions],
+        message="Prescriptions retrieved.",
+        request_id=REQUEST_ID_CTX.get(""),
+    )
+
+
 @router.post("/upload", response_model=APIResponse[UploadPrescriptionResponse], summary="Upload Prescription Image")
 async def upload_prescription(
     background_tasks: BackgroundTasks,
@@ -75,6 +89,7 @@ async def get_prescription(
         extracted_medicines=prescription.extracted_medicines,
         medicine_match_ids=prescription.medicine_match_ids,
         overall_confidence=prescription.overall_confidence,
+        last_error=prescription.last_error,
     )
 
     return APIResponse.ok(data=data, request_id=REQUEST_ID_CTX.get(""))

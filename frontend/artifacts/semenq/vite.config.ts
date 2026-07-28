@@ -5,6 +5,8 @@ import path from "path";
 
 const DEFAULT_PORT = 5173;
 const DEFAULT_BASE_PATH = "/";
+// The bundled FastAPI server listens on 8000 by default (see backend/run.ps1).
+// Keep this aligned so `/api` requests work without requiring an API_ORIGIN override.
 const DEFAULT_API_ORIGIN = "http://127.0.0.1:8000";
 
 function resolvePort(rawPort: string | undefined, fallback: number): number {
@@ -43,7 +45,6 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(import.meta.dirname, "src"),
-      "@assets": path.resolve(import.meta.dirname, "..", "..", "attached_assets"),
     },
     dedupe: ["react", "react-dom"],
   },
@@ -61,6 +62,7 @@ export default defineConfig({
       "/api": {
         target: apiOrigin,
         changeOrigin: true,
+        ws: true,
       },
     },
     fs: {

@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 const features = [
   { icon: Search, title: "Intelligent Medicine Search", desc: "AI-powered search that expands from your neighbourhood to all of India until it finds what you need.", color: "bg-primary/10 text-primary" },
   { icon: Zap, title: "AI Prescription Parsing", desc: "Upload a photo of your prescription and our AI extracts every medicine with dosage and frequency in seconds.", color: "bg-ai/10 text-ai" },
-  { icon: MapPin, title: "National Medicine Network", desc: "Access 18,000+ verified pharmacies across all 28 states and 8 UTs, all in one platform.", color: "bg-success/10 text-success" },
+  { icon: MapPin, title: "Medicine Network", desc: "Search verified pharmacies and live inventory from one platform.", color: "bg-success/10 text-success" },
   { icon: Truck, title: "Doorstep Courier Delivery", desc: "Reserve medicines from pharmacies in any state and get them delivered to your address.", color: "bg-warning/10 text-warning" },
   { icon: Shield, title: "Verified & Trusted", desc: "Every pharmacy is CDSCO licensed and verified. Every medicine is genuine and expiry-checked.", color: "bg-destructive/10 text-destructive" },
   { icon: Clock, title: "Real-Time Availability", desc: "Live inventory updates ensure you're always seeing actual stock, not cached data.", color: "bg-primary/10 text-primary" },
@@ -27,7 +27,7 @@ const steps = [
 const faqs = [
   { q: "Is Semenq free for patients?", a: "Yes, Semenq is completely free for patients to search, reserve, and track medicines. We charge a small service fee only on courier deliveries." },
   { q: "How does AI prescription parsing work?", a: "Our AI model, trained on millions of Indian prescriptions, reads your prescription image and extracts each medicine name, dosage, and frequency with a confidence score. You can review and edit before searching." },
-  { q: "What if my medicine isn't available anywhere?", a: "Semenq searches all 18,000+ partner pharmacies across India. If your medicine is genuinely unavailable nationally, we alert you and show the nearest expected restock date." },
+  { q: "What if my medicine isn't available nearby?", a: "Semenq searches the available pharmacy network and shows the nearest matching stock when it is found." },
   { q: "Are the medicines genuine?", a: "Every pharmacy on Semenq is CDSCO licensed and has undergone our 12-point verification process. We don't allow grey-market or unverified sellers." },
   { q: "Can pharmacies join Semenq?", a: "Yes. Pharmacies can apply at semenq.in/pharmacy-signup. After CDSCO verification, you get full access to our inventory management, demand forecasting, and patient network." },
 ];
@@ -127,7 +127,7 @@ export default function Landing() {
               transition={{ duration: 0.6, delay: 0.2 }}
               className="text-xl text-muted-foreground mb-10 max-w-2xl mx-auto leading-relaxed"
             >
-              Semenq intelligently searches 18,000+ pharmacies — from your street to all of India — to find your medicines. Upload a prescription, find stock, reserve, and get delivered.
+              Semenq intelligently searches the pharmacy network — from your street to all of India — to find your medicines. Upload a prescription, find stock, reserve, and get delivered.
             </motion.p>
 
             <motion.div
@@ -261,7 +261,7 @@ export default function Landing() {
               <div className="absolute bottom-0 right-0 w-32 h-32 bg-white rounded-full blur-2xl" />
             </div>
             <h2 className="text-4xl font-bold text-white mb-4 relative">Start finding your medicines today</h2>
-            <p className="text-white/80 mb-8 text-lg relative">Join 2.4 million patients who never worry about medicine availability again.</p>
+            <p className="text-white/80 mb-8 text-lg relative">Find medicine availability with confidence.</p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center relative">
               <Link href="/register">
                 <Button size="lg" variant="secondary" className="rounded-[18px] px-8 h-12 font-semibold">

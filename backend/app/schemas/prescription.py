@@ -47,3 +47,4 @@ class PrescriptionResponse(BaseModel):
     extracted_medicines: list[ExtractedMedicineItemSchema] = []
     medicine_match_ids: list[str] = []
     overall_confidence: float
+    last_error: Optional[str] = None

@@ -1,5 +1,6 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { AlertCircle } from "lucide-react";
+import { Link } from "wouter";
 
 export default function NotFound() {
   return (
@@ -12,8 +13,11 @@ export default function NotFound() {
           </div>
 
           <p className="mt-4 text-sm text-gray-600">
-            Did you forget to add the page to the router?
+            This page is unavailable or the link has expired.
           </p>
+          <Link href="/" className="inline-block mt-5 text-sm font-medium text-primary hover:underline">
+            Return to Semenq
+          </Link>
         </CardContent>
       </Card>
     </div>

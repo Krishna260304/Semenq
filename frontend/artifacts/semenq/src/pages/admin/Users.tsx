@@ -5,7 +5,8 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { toast } from "sonner";
+import { useQuery } from "@tanstack/react-query";
+import { auth } from "@/lib/firebase";
 
 const roleColors: Record<string, string> = {
   patient: "bg-primary/10 text-primary",
@@ -16,7 +17,16 @@ const roleColors: Record<string, string> = {
 export default function AdminUsers() {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState("all");
-  const users: any[] = [];
+  const { data, isLoading } = useQuery({
+    queryKey: ["admin-users"],
+    queryFn: async () => {
+      const token = await auth.currentUser?.getIdToken();
+      const response = await fetch("/api/users/admin-list", { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+      if (!response.ok) throw new Error("Unable to load users.");
+      return response.json();
+    },
+  });
+  const users = ((data as any)?.data || []) as any[];
 
   const filtered = users.filter(u => {
     const match = u.name.toLowerCase().includes(query.toLowerCase()) || u.email.toLowerCase().includes(query.toLowerCase());
@@ -61,7 +71,7 @@ export default function AdminUsers() {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+        {isLoading ? <div className="py-16 text-center text-muted-foreground">Loading users…</div> : <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
           {filtered.map((user, i) => (
             <motion.div key={user.id} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }} className="bg-card border border-card-border rounded-[20px] p-5 card-lift">
               <div className="flex items-start gap-3">
@@ -91,15 +101,11 @@ export default function AdminUsers() {
               <div className="mt-3 pt-3 border-t border-border flex items-center justify-between">
                 <span className={`text-xs px-2.5 py-0.5 rounded-full font-medium capitalize ${roleColors[user.role]}`}>{user.role}</span>
                 {user.role === "patient" && <span className="text-xs text-muted-foreground">{user.orders} orders</span>}
-                {!user.isVerified && (
-                  <Button size="sm" className="h-6 text-xs px-2 rounded-lg bg-success hover:bg-success/90 gap-1" onClick={() => toast.success(`${user.name} verified`)}>
-                    <Shield className="w-3 h-3" /> Verify
-                  </Button>
-                )}
+                {!user.isVerified && <span className="text-xs text-warning">Verification pending</span>}
               </div>
             </motion.div>
           ))}
-        </div>
+        </div>}
 
         {filtered.length === 0 && (
           <div className="text-center py-16 text-muted-foreground">

@@ -2,7 +2,9 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import hashlib
+import re
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -13,7 +15,7 @@ from app.models.medicine import Medicine
 from app.models.prescription import (
     AILog,
     ConfidenceLevel,
-    ExtractedMedicineItem,
+    ExtractedMedicineItem as PrescriptionExtractedMedicineItem,
     MedicineMatch,
     OCRLog,
     OCRStatus,
@@ -22,9 +24,10 @@ from app.models.prescription import (
     PrescriptionStatus,
 )
 from app.providers.ai.qwen_provider import QwenProvider
-from app.providers.ocr.easyocr_provider import EasyOCRProvider
-from app.providers.ocr.paddleocr_provider import PaddleOCRProvider
+from app.providers.ai.base import AIExtractionResult, ExtractedMedicineItem as AIExtractedMedicineItem
+from app.providers.ocr.factory import get_ocr_provider
 from app.providers.storage.local_provider import LocalStorageProvider
+from app.services.medicine_matching import build_medicine_queries, rank_medicines_for_queries
 
 logger = get_logger(__name__)
 settings = get_settings()
@@ -37,17 +40,105 @@ def _utcnow() -> datetime:
 class PrescriptionService:
     def __init__(self) -> None:
         self._storage = LocalStorageProvider()
-        self._ocr = self._get_ocr_provider()
+        self._ocr = get_ocr_provider()
         if settings.AI_PROVIDER == "qwen":
             self._ai = QwenProvider()
 
-    def _get_ocr_provider(self):
-        provider = settings.OCR_PROVIDER.lower()
-        if provider == "paddleocr":
-            return PaddleOCRProvider()
-        if provider == "easyocr":
-            return EasyOCRProvider()
-        raise ValueError(f"Unsupported OCR_PROVIDER: {settings.OCR_PROVIDER}")
+    async def _extract_text(self, image_bytes: bytes) -> tuple[str, float, str, list[dict], int]:
+        ocr_result = await self._ocr.extract_text(image_bytes)
+        return (
+            ocr_result.raw_text,
+            ocr_result.confidence,
+            ocr_result.provider,
+            ocr_result.bounding_boxes,
+            ocr_result.execution_time_ms,
+        )
+
+    def _extract_medicines_fast(self, ocr_text: str) -> AIExtractionResult | None:
+        lines = [line.strip() for line in ocr_text.splitlines() if line.strip()]
+        if not lines:
+            return None
+
+        dosage_re = re.compile(
+            r"(?i)\b(\d+(?:\.\d+)?\s*(?:mg|mcg|g|ml|iu|unit|units|tab|tabs|tablet|tablets|cap|caps|capsule|capsules|drop|drops|syrup|spray|patch))\b"
+        )
+        frequency_re = re.compile(
+            r"(?i)\b(once daily|twice daily|thrice daily|four times daily|od|bd|bid|tid|qid|hs|morning|night|before food|after food)\b"
+        )
+        duration_re = re.compile(r"(?i)\b(\d+\s*(?:day|days|week|weeks|month|months))\b")
+        noise_re = re.compile(r"(?i)\b(tab|tablet|cap|capsule|syrup|inj|injection|ointment|cream|drop|drops|ip|usp|bp)\b")
+
+        medicines: list[AIExtractedMedicineItem] = []
+        total_confidence = 0.0
+
+        for line in lines:
+            if len(medicines) >= 6:
+                break
+            if not any(char.isalpha() for char in line):
+                continue
+
+            dosage_match = dosage_re.search(line)
+            frequency_match = frequency_re.search(line)
+            duration_match = duration_re.search(line)
+
+            candidate = line
+            candidate = dosage_re.sub(" ", candidate)
+            candidate = frequency_re.sub(" ", candidate)
+            candidate = duration_re.sub(" ", candidate)
+            candidate = noise_re.sub(" ", candidate)
+            candidate = re.split(r"[-:,/]", candidate, maxsplit=1)[0]
+            candidate = re.sub(r"\s+", " ", candidate).strip(" .")
+
+            tokens = [token for token in candidate.split() if len(token) > 1 and token.lower() not in {"ip", "usp", "bp"}]
+            if not tokens:
+                continue
+
+            medicine_name = " ".join(tokens[:4]).strip()
+            if len(medicine_name) < 3:
+                continue
+
+            confidence = 0.5
+            if dosage_match:
+                confidence += 0.18
+            if frequency_match:
+                confidence += 0.12
+            if duration_match:
+                confidence += 0.05
+            if medicine_name[:1].isupper():
+                confidence += 0.03
+
+            confidence = min(confidence, 0.92)
+            total_confidence += confidence
+
+            medicines.append(
+                AIExtractedMedicineItem(
+                    raw_text=line,
+                    medicine_name=medicine_name,
+                    dosage=dosage_match.group(1) if dosage_match else None,
+                    frequency=frequency_match.group(1) if frequency_match else None,
+                    duration=duration_match.group(1) if duration_match else None,
+                    quantity=None,
+                    special_instructions="",
+                    confidence=confidence,
+                )
+            )
+
+        if not medicines:
+            return None
+
+        overall_confidence = round(total_confidence / len(medicines), 4)
+        return AIExtractionResult(
+            medicines=medicines,
+            overall_confidence=overall_confidence,
+            provider="heuristic",
+            model="heuristic-rule-extractor",
+            raw_response=json.dumps(
+                {
+                    "medicines": [item.__dict__ for item in medicines],
+                    "overall_confidence": overall_confidence,
+                }
+            ),
+        )
 
     async def upload_prescription(
         self, patient_id: str, image_bytes: bytes, filename: str, content_type: str
@@ -128,12 +219,13 @@ class PrescriptionService:
         await prescription.save()
 
         try:
-            ocr_result = await self._ocr.extract_text(image_bytes)
+            ocr_text, ocr_confidence, ocr_provider_name, ocr_boxes, ocr_time_ms = await self._extract_text(image_bytes)
             ocr_log.status = OCRStatus.COMPLETED
-            ocr_log.raw_text = ocr_result.raw_text
-            ocr_log.confidence = ocr_result.confidence
-            ocr_log.bounding_boxes = ocr_result.bounding_boxes
-            ocr_log.execution_time_ms = ocr_result.execution_time_ms
+            ocr_log.ocr_provider = ocr_provider_name
+            ocr_log.raw_text = ocr_text
+            ocr_log.confidence = ocr_confidence
+            ocr_log.bounding_boxes = ocr_boxes
+            ocr_log.execution_time_ms = ocr_time_ms
             ocr_log.completed_at = _utcnow()
             await ocr_log.save()
             
@@ -151,23 +243,37 @@ class PrescriptionService:
         prescription.processing_status = PrescriptionStatus.AI_PROCESSING
         await prescription.save()
 
+        ai_result = self._extract_medicines_fast(ocr_log.raw_text)
+        using_fast_path = ai_result is not None and ai_result.overall_confidence >= 0.65
+        if not using_fast_path and not hasattr(self, "_ai"):
+            raise PrescriptionProcessingException("AI provider is not configured.")
+
         ai_log = AILog(
             prescription_id=prescription.id,
-            ai_provider=self._ai.provider_name,
-            model_name=settings.QWEN_MODEL,
+            ai_provider="heuristic" if using_fast_path else self._ai.provider_name,
+            model_name="heuristic-rule-extractor" if using_fast_path else settings.QWEN_MODEL,
         )
         await ai_log.insert()
         prescription.ai_log_id = ai_log.id
         await prescription.save()
 
         try:
-            ai_result = await self._ai.extract_prescription(ocr_log.raw_text)
+            if not using_fast_path:
+                ai_result = await self._ai.extract_prescription(ocr_log.raw_text)
+                ai_log.ai_provider = ai_result.provider
+                ai_log.model_name = ai_result.model
+
+            if ai_result is None:
+                raise PrescriptionProcessingException("AI extraction returned no result.")
+
             ai_log.status = OCRStatus.COMPLETED
             ai_log.raw_response = ai_result.raw_response
             ai_log.overall_confidence = ai_result.overall_confidence
             ai_log.execution_time_ms = ai_result.execution_time_ms
             ai_log.estimated_tokens = ai_result.estimated_tokens
             ai_log.completed_at = _utcnow()
+            ai_log.ai_provider = ai_result.provider
+            ai_log.model_name = ai_result.model
             
             extracted_items = []
             for m in ai_result.medicines:
@@ -176,7 +282,7 @@ class PrescriptionService:
                     ConfidenceLevel.MEDIUM if m.confidence >= 0.7 else
                     ConfidenceLevel.LOW
                 )
-                item = ExtractedMedicineItem(
+                item = PrescriptionExtractedMedicineItem(
                     raw_text=m.raw_text,
                     medicine_name=m.medicine_name,
                     brand_name=m.brand_name,
@@ -225,9 +331,10 @@ class PrescriptionService:
         await prescription.save()
 
         matches = await self._match_medicines_with_db(prescription.id, extracted_items)
+        prescription.extracted_medicines = [item.model_dump(by_alias=True) for item in extracted_items]
         prescription.medicine_match_ids = [m.id for m in matches]
         
-        needs_verification = any(m.match_type == "none" or m.match_score < 0.8 for m in matches)
+        needs_verification = not matches or any(m.match_type == "none" or m.match_score < 0.8 for m in matches)
         prescription.processing_status = PrescriptionStatus.PARTIAL if needs_verification else PrescriptionStatus.COMPLETED
         prescription.processing_completed_at = _utcnow()
         await prescription.save()
@@ -236,41 +343,61 @@ class PrescriptionService:
         return prescription
 
     async def _match_medicines_with_db(
-        self, prescription_id: str, extracted_items: list[ExtractedMedicineItem]
+        self, prescription_id: str, extracted_items: list[PrescriptionExtractedMedicineItem]
     ) -> list[MedicineMatch]:
         matches = []
         for item in extracted_items:
-            db_medicine = await Medicine.find_one(
-                Medicine.name == item.medicine_name.strip(),
-                Medicine.is_deleted == False
+            queries = build_medicine_queries(
+                item.raw_text,
+                item.medicine_name,
+                item.brand_name,
+                item.composition,
+                item.dosage,
+                item.frequency,
+                item.duration,
+                item.special_instructions,
             )
-            
+            candidate_pool = []
+            seen_ids: set[str] = set()
+            for query in queries:
+                search_results = await Medicine.find(
+                    {"$text": {"$search": query}, "is_deleted": False}
+                ).limit(10).to_list()
+                for medicine in search_results:
+                    if medicine.id in seen_ids:
+                        continue
+                    seen_ids.add(medicine.id)
+                    candidate_pool.append(medicine)
+
+            ranked = rank_medicines_for_queries(queries, candidate_pool, limit=3)
             match_record = MedicineMatch(
                 prescription_id=prescription_id,
                 extracted_name=item.medicine_name,
             )
 
-            if db_medicine:
-                match_record.matched_medicine_id = db_medicine.id
-                match_record.matched_medicine_name = db_medicine.name
-                match_record.match_type = "exact"
-                match_record.match_score = 1.0
-            else:
-                search_results = await Medicine.find(
-                    {"$text": {"$search": item.medicine_name}, "is_deleted": False}
-                ).limit(3).to_list()
+            if ranked:
+                top_match = ranked[0]
+                match_record.matched_medicine_id = top_match.medicine.id
+                match_record.matched_medicine_name = top_match.medicine.name
+                match_record.match_type = top_match.match_type if top_match.match_type != "none" else "typo"
+                match_record.match_score = top_match.score
+                match_record.alternative_matches = [
+                    {
+                        "id": item.medicine.id,
+                        "name": item.medicine.name,
+                        "score": item.score,
+                    }
+                    for item in ranked[1:]
+                ]
 
-                if search_results:
-                    top_match = search_results[0]
-                    match_record.matched_medicine_id = top_match.id
-                    match_record.matched_medicine_name = top_match.name
-                    match_record.match_type = "fuzzy"
-                    match_record.match_score = 0.85 # Heuristic
-                    
-                    match_record.alternative_matches = [
-                        {"id": r.id, "name": r.name} for r in search_results[1:]
-                    ]
-            
+                if top_match.score >= 0.85:
+                    item.medicine_name = top_match.medicine.name
+                    if getattr(top_match.medicine, "brand_name", None):
+                        item.brand_name = top_match.medicine.brand_name
+                    if getattr(top_match.medicine, "composition", None):
+                        item.composition = top_match.medicine.composition
+                    item.requires_manual_verification = top_match.score < 0.92
+
             await match_record.insert()
             matches.append(match_record)
             

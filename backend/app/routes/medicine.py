@@ -9,13 +9,36 @@ from app.core.middleware.request_id import REQUEST_ID_CTX
 from app.core.responses import APIResponse
 from app.dependencies.auth import get_current_active_user, require_admin
 from app.models.user import User
-from app.schemas.medicine import MedicineResponse, MedicineSearchRequest
+from app.schemas.medicine import MedicineCreateRequest, MedicineResponse, MedicineSearchRequest, MedicineUpdateRequest
 from app.services.medicine_service import MedicineService
 from app.services.search_service import SearchService
 
 router = APIRouter(prefix="/medicines", tags=["Medicines & Search"])
 _medicine_service = MedicineService()
 _search_service = SearchService()
+
+
+@router.post("", response_model=APIResponse[MedicineResponse], status_code=201, summary="Create medicine")
+async def create_medicine(
+    body: MedicineCreateRequest,
+    user: User = Depends(require_admin),
+) -> APIResponse:
+    medicine = await _medicine_service.create_medicine(body.model_dump(), created_by=user.id)
+    return APIResponse.ok(data=MedicineResponse(**medicine.model_dump()), message="Medicine created.")
+
+
+@router.patch("/{medicine_id}", response_model=APIResponse[MedicineResponse], summary="Update medicine")
+async def update_medicine(
+    medicine_id: str,
+    body: MedicineUpdateRequest,
+    user: User = Depends(require_admin),
+) -> APIResponse:
+    medicine = await _medicine_service.update_medicine(
+        medicine_id,
+        body.model_dump(exclude_unset=True),
+        updated_by=user.id,
+    )
+    return APIResponse.ok(data=MedicineResponse(**medicine.model_dump()), message="Medicine updated.")
 
 
 @router.post("/search", response_model=APIResponse[list[dict]], summary="Geospatial Medicine Search")

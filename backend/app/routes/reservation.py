@@ -7,7 +7,7 @@ from app.core.middleware.request_id import REQUEST_ID_CTX
 from app.core.responses import APIResponse
 from app.dependencies.auth import get_current_active_user, require_patient, require_pharmacy
 from app.models.reservation import ReservationStatus
-from app.models.user import User
+from app.models.user import Pharmacy, User
 from app.schemas.reservation import CreateReservationRequest, ReservationResponse
 from app.services.qr_service import QRService
 from app.services.reservation_service import ReservationService
@@ -20,6 +20,18 @@ _qr_service = QRService()
 @router.get("", response_model=APIResponse[list[dict]], summary="List reservations")
 async def list_reservations() -> APIResponse:
     items = await Reservation.find(Reservation.is_deleted == False).sort([("created_at", -1)]).limit(100).to_list()  # noqa: E712
+    return APIResponse.ok(data=[item.model_dump() for item in items], request_id=REQUEST_ID_CTX.get(""))
+
+
+@router.get("/pharmacy", response_model=APIResponse[list[dict]], summary="List pharmacy reservations")
+async def get_pharmacy_reservations(user: User = Depends(require_pharmacy)) -> APIResponse:
+    pharmacy = await Pharmacy.find_one(Pharmacy.user_id == user.id)
+    if not pharmacy:
+        return APIResponse.ok(data=[], message="No pharmacy profile found.")
+    items = await Reservation.find(
+        Reservation.pharmacy_id == pharmacy.id,
+        Reservation.is_deleted == False,  # noqa: E712
+    ).sort([("created_at", -1)]).to_list()
     return APIResponse.ok(data=[item.model_dump() for item in items], request_id=REQUEST_ID_CTX.get(""))
 
 

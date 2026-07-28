@@ -9,7 +9,7 @@ import { useCreateReservation, useGetMedicine, useGetMedicineAvailability, useLi
 import { toast } from "sonner";
 import { QRCode } from "@/components/QRCode";
 
-const steps = ["Choose Pharmacy", "Review Medicine", "Pickup / Courier", "Summary & Pay"];
+const steps = ["Choose Pharmacy", "Review Medicine", "Pickup / Courier", "Order Summary"];
 
 function StepDot({ num, current, total }: { num: number; current: number; total: number }) {
   const done = current > num;
@@ -61,10 +61,8 @@ export default function Reserve() {
       });
       setReservationResult({ id: (result as any).id, qrCode: (result as any).qrCode || `SEMENQ:RES:${(result as any).id}:${med.id}:${chosenPharmacy.id}` });
       toast.success("Reservation confirmed!");
-    } catch {
-      const fakeId = Math.floor(Math.random() * 9000) + 1000;
-      setReservationResult({ id: fakeId, qrCode: `SEMENQ:RES:${fakeId}:${med.id}:${chosenPharmacy.id}` });
-      toast.success("Reservation confirmed!");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not create reservation. Please try again.");
     }
     setLoading(false);
   };
@@ -289,7 +287,7 @@ export default function Reserve() {
             </Button>
           ) : (
             <Button onClick={handleConfirm} disabled={loading} className="flex-1 h-12 rounded-[18px] font-semibold">
-              {loading ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <>Confirm & Pay ₹{total} <CheckCircle2 className="w-4 h-4 ml-2" /></>}
+              {loading ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <>Confirm reservation ₹{total} <CheckCircle2 className="w-4 h-4 ml-2" /></>}
             </Button>
           )}
         </div>

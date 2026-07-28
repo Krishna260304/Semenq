@@ -334,5 +334,20 @@ export async function customFetch<T = unknown>(
     throw new ApiError(response, errorData, requestInfo);
   }
 
-  return (await parseSuccessBody(response, responseType, requestInfo)) as T;
+  const body = await parseSuccessBody(response, responseType, requestInfo);
+
+  // FastAPI endpoints in this workspace consistently return APIResponse
+  // envelopes, while the generated client types describe the inner payload.
+  // Unwrap successful envelopes once at the transport boundary so every hook
+  // receives the live data shape it was generated for.
+  if (
+    body &&
+    typeof body === "object" &&
+    "success" in body &&
+    "data" in body
+  ) {
+    return (body as { data: T }).data;
+  }
+
+  return body as T;
 }

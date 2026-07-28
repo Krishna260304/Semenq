@@ -45,3 +45,4 @@ firebase-service-account.json
 *-service-account.json
 uploads/
 data/
+.runtime/

@@ -1,17 +1,8 @@
-# Root .gitignore for the project
-
-# Node
 node_modules/
 .pnpm-store/
-
-# Frontend build/artifacts
 dist/
 build/
 out/
-artifacts/
-frontend/artifacts/
-
-# Python
 __pycache__/
 *.py[cod]
 *$py.class
@@ -23,31 +14,30 @@ ENV/
 *.sqlite
 *.db
 .pytest_cache/
-
-# Environment files
+.coverage
+htmlcov/
 .env
 .env.*
-
-# IDEs and editors
+*.backup
+firebase-service-account.json
+*-service-account.json
 .vscode/
 .idea/
 *.swp
-
-# Logs
+*.swo
 *.log
 logs/
-
-# OS files
 .DS_Store
 Thumbs.db
-
-# Backend uploads/user content
+Thumbs.db:encryptable
 backend/uploads/
 uploads/
-
-# Misc
 coverage/
 coverage-final.json
 npm-debug.log
 yarn-error.log
 pnpm-debug.log
+
+# Replit
+.replit
+.replit-artifact/

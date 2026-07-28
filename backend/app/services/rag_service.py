@@ -1,27 +1,31 @@
 from __future__ import annotations
 
-import os
-from typing import List, Dict, Any, Optional
-from datetime import datetime
+from typing import Any, Dict, List
 
 from redisvl.index import SearchIndex
 from redisvl.schema import IndexSchema
 from redisvl.query import VectorQuery
-from sentence_transformers import SentenceTransformer
 
 from app.core.config import get_settings
 from app.core.logging.logger import get_logger
+from app.core.ml_runtime import configure_model_cache, get_torch_device
 from app.models.medicine import Medicine
 
 logger = get_logger(__name__)
 
 _embedding_model = None
 
-def get_embedding_model() -> SentenceTransformer:
+def get_embedding_model() -> Any:
     global _embedding_model
     if _embedding_model is None:
+        configure_model_cache()
+        from sentence_transformers import SentenceTransformer
+
+        device = get_torch_device()
+
         logger.info("Loading sentence-transformers model 'all-MiniLM-L6-v2' (this may take a moment on first run)...")
-        _embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
+        _embedding_model = SentenceTransformer("all-MiniLM-L6-v2", device=device)
+        logger.info("Sentence-transformers device selected", device=device)
     return _embedding_model
 
 

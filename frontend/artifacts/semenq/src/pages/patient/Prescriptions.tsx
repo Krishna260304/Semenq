@@ -4,16 +4,27 @@ import { TopBar } from "@/components/TopBar";
 import { FileImage, Upload, CheckCircle2, Clock, Search, ChevronRight, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
-import { useListPrescriptions } from "@workspace/api-client-react";
 import { SkeletonCard } from "@/components/SkeletonCard";
+import { useQuery } from "@tanstack/react-query";
+import { auth } from "@/lib/firebase";
+import { useGetMyProfile } from "@workspace/api-client-react";
 
 export default function Prescriptions() {
-  const { data, isLoading } = useListPrescriptions();
-  const prescriptions = (Array.isArray(data) ? data : []) as any[];
+  const { data: profile } = useGetMyProfile();
+  const { data, isLoading } = useQuery({
+    queryKey: ["patient-prescriptions"],
+    queryFn: async () => {
+      const token = await auth.currentUser?.getIdToken();
+      const response = await fetch("/api/prescriptions", { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+      if (!response.ok) throw new Error("Unable to load prescriptions.");
+      return response.json();
+    },
+  });
+  const prescriptions = ((data as any)?.data || []) as any[];
 
   return (
     <PatientLayout>
-      <TopBar title="My Prescriptions" userName="Guest" />
+      <TopBar title="My Prescriptions" userName={(profile as any)?.name || "Patient"} />
 
       <div className="p-6 max-w-3xl">
         <div className="flex items-center justify-between mb-6">
@@ -35,21 +46,21 @@ export default function Prescriptions() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between gap-2">
-                      <p className="font-semibold text-foreground">Rx from {rx.doctorName}</p>
+                      <p className="font-semibold text-foreground">Rx from {rx.doctor_name || "Doctor not detected"}</p>
                       <span className="text-xs font-medium text-success bg-success/10 px-2 py-0.5 rounded-full shrink-0 flex items-center gap-1">
                         <CheckCircle2 className="w-3 h-3" /> Parsed
                       </span>
                     </div>
-                    <p className="text-sm text-muted-foreground mt-0.5">{rx.hospitalName}</p>
+                    <p className="text-sm text-muted-foreground mt-0.5">{rx.hospital_name || "Hospital not detected"}</p>
                     <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
                       <Clock className="w-3 h-3" />
-                      {new Date(rx.uploadedAt).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })}
+                      {new Date(rx.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })}
                     </p>
 
                     <div className="mt-3 flex items-center gap-3">
                       <div className="flex items-center gap-1.5">
                         <Zap className="w-3.5 h-3.5 text-ai" />
-                        <span className="text-xs text-muted-foreground">AI Confidence: <span className="font-semibold text-foreground">{rx.overallConfidence}%</span></span>
+                        <span className="text-xs text-muted-foreground">AI Confidence: <span className="font-semibold text-foreground">{Math.round((rx.overall_confidence || 0) <= 1 ? (rx.overall_confidence || 0) * 100 : rx.overall_confidence || 0)}%</span></span>
                       </div>
                       <Link href="/patient/search">
                         <button className="text-xs text-primary font-medium hover:underline flex items-center gap-1">

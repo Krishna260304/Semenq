@@ -6,9 +6,11 @@ from fastapi import APIRouter, BackgroundTasks, Depends, Request
 from app.core.middleware.request_id import REQUEST_ID_CTX
 from app.core.responses import APIResponse
 from app.dependencies.auth import get_current_active_user, get_token_payload
-from app.models.user import User
+from app.models.user import Session, User
 from app.schemas.auth import (
     ChangePasswordRequest,
+    EmailOtpRequest,
+    EmailOtpResponse,
     FirebaseRegisterRequest,
     LoginRequest,
     FirebaseLoginRequest,
@@ -23,9 +25,12 @@ from app.schemas.auth import (
     SendVerificationRequest,
     TokenResponse,
     UserSummaryResponse,
+    VerifyPasswordResetRequest,
     VerifyEmailRequest,
+    VerifyEmailOtpRequest,
 )
 from app.services.auth_service import AuthService
+from app.security.firebase_auth import create_firebase_custom_token, get_or_create_firebase_user
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 _auth_service = AuthService()
@@ -250,6 +255,76 @@ async def login_with_firebase(
     )
 
 
+@router.post(
+    "/request-otp",
+    response_model=APIResponse[None],
+    summary="Request an OTP",
+)
+async def request_support_otp(
+    body: EmailOtpRequest,
+    request: Request,
+) -> APIResponse:
+    recipient_email = await _auth_service.request_support_otp(
+        email=body.email,
+        purpose=body.purpose,
+        role=body.role,
+        ip_address=_client_ip(request),
+    )
+    if body.purpose == "email_2fa":
+        message = "OTP sent to your registered email address for verification."
+    else:
+        message = f"OTP sent to {recipient_email} for verification."
+    return APIResponse.ok(
+        message=message,
+        request_id=REQUEST_ID_CTX.get(""),
+    )
+
+
+@router.post(
+    "/verify-otp",
+    response_model=APIResponse[EmailOtpResponse],
+    summary="Verify an OTP",
+)
+async def verify_support_otp(
+    body: VerifyEmailOtpRequest,
+    request: Request,
+) -> APIResponse:
+    user = await _auth_service.verify_support_otp(
+        email=body.email,
+        raw_token=body.otp,
+        purpose=body.purpose,
+        role=body.role,
+        ip_address=_client_ip(request),
+    )
+
+    firebase_user = get_or_create_firebase_user(
+        uid=user.id,
+        email=user.email,
+        display_name=user.full_name,
+        email_verified=user.email_verified,
+    )
+    firebase_custom_token = create_firebase_custom_token(
+        firebase_user.uid,
+        {
+            "semenq_user_id": user.id,
+            "semenq_role": getattr(user.role, "value", str(user.role)),
+            "semenq_email": user.email,
+        },
+    )
+
+    return APIResponse.ok(
+        data=EmailOtpResponse(
+            firebase_custom_token=firebase_custom_token,
+            user_id=user.id,
+            role=getattr(user.role, "value", str(user.role)),
+            email=user.email,
+            full_name=user.full_name,
+        ),
+        message="OTP verified successfully.",
+        request_id=REQUEST_ID_CTX.get(""),
+    )
+
+
 @router.post("/refresh", response_model=APIResponse[dict], summary="Refresh access token")
 async def refresh_token(
     body: RefreshTokenRequest,
@@ -279,6 +354,42 @@ async def logout_all(
     return APIResponse.ok(message="Logged out from all devices.", request_id=REQUEST_ID_CTX.get(""))
 
 
+@router.get("/sessions", response_model=APIResponse[list[dict]], summary="List active sessions")
+async def list_sessions(
+    user: User = Depends(get_current_active_user),
+) -> APIResponse:
+    sessions = await _auth_service.get_active_sessions(user.id)
+    return APIResponse.ok(
+        data=[
+            {
+                "id": session.id,
+                "deviceName": session.device_name or "Unknown device",
+                "deviceOs": session.device_os,
+                "browser": session.browser,
+                "operatingSystem": session.operating_system,
+                "loginAt": session.login_at,
+                "lastActivityAt": session.last_activity_at,
+                "current": False,
+            }
+            for session in sessions
+        ],
+        message="Active sessions retrieved.",
+        request_id=REQUEST_ID_CTX.get(""),
+    )
+
+
+@router.delete("/sessions/{session_id}", response_model=APIResponse[None], summary="Revoke an active session")
+async def revoke_session(
+    session_id: str,
+    user: User = Depends(get_current_active_user),
+) -> APIResponse:
+    revoked = await _auth_service.revoke_session(session_id, user.id)
+    if not revoked:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Active session not found.")
+    return APIResponse.ok(message="Session revoked.", request_id=REQUEST_ID_CTX.get(""))
+
+
 @router.post("/send-verification", response_model=APIResponse[None], summary="Resend email verification")
 async def send_verification(
     body: SendVerificationRequest,
@@ -287,7 +398,7 @@ async def send_verification(
     raw_token = await _auth_service.resend_verification(body.email)
     if raw_token:
         background_tasks.add_task(_send_verification_email, body.email, "", raw_token)
-    return APIResponse.ok(message="If your email is registered, you will receive a verification link.")
+    return APIResponse.ok(message="If your email is registered, you will receive a 6-digit verification code.")
 
 
 @router.post("/verify-email", response_model=APIResponse[None], summary="Verify email address")
@@ -307,7 +418,15 @@ async def request_password_reset(
     raw_token = await _auth_service.request_password_reset(body.email)
     if raw_token:
         background_tasks.add_task(_send_password_reset_email, body.email, raw_token)
-    return APIResponse.ok(message="If your email is registered, you will receive a reset link.")
+    return APIResponse.ok(message="If your email is registered, you will receive a 6-digit reset code.")
+
+
+@router.post("/verify-password-reset", response_model=APIResponse[None], summary="Verify password reset code")
+async def verify_password_reset(
+    body: VerifyPasswordResetRequest,
+) -> APIResponse:
+    await _auth_service.verify_password_reset_token(body.token)
+    return APIResponse.ok(message="Password reset code verified.")
 
 
 @router.post("/reset-password", response_model=APIResponse[None], summary="Reset password")

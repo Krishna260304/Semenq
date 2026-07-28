@@ -7,10 +7,18 @@ import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
 import { toast } from "sonner";
 import { useGetMyProfile } from "@workspace/api-client-react";
+import { auth } from "@/lib/firebase";
 
-type ScanStatus = "idle" | "uploading" | "scanning" | "done";
+type ScanStatus = "idle" | "uploading" | "scanning" | "done" | "error";
 
-const parsedMedicines: any[] = [];
+type ParsedMedicine = {
+  name: string;
+  dosage: string;
+  frequency: string;
+  duration: string;
+  status: "confirmed" | "lowConfidence" | "unmatched";
+  confidence: number;
+};
 
 const scanSteps = [
   "Preprocessing image...",
@@ -28,26 +36,107 @@ export default function PrescriptionUpload() {
   const [scanStatus, setScanStatus] = useState<ScanStatus>("idle");
   const [scanStep, setScanStep] = useState(0);
   const [progress, setProgress] = useState(0);
+  const [parsedMedicines, setParsedMedicines] = useState<ParsedMedicine[]>([]);
+  const [doctorName, setDoctorName] = useState<string | null>(null);
+  const [hospitalName, setHospitalName] = useState<string | null>(null);
+  const [overallConfidence, setOverallConfidence] = useState<number | null>(null);
+  const [scanError, setScanError] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const handleFile = (f: File) => {
-    if (!f.type.startsWith("image/")) { toast.error("Please upload an image file (JPG, PNG, PDF)"); return; }
+    if (!f.type.startsWith("image/")) { toast.error("Please upload an image file (JPG or PNG)"); return; }
     setFile(f);
     setPreview(URL.createObjectURL(f));
+    setScanError(null);
+    setParsedMedicines([]);
+    setDoctorName(null);
+    setHospitalName(null);
+    setOverallConfidence(null);
     setScanStatus("uploading");
-    startScanning();
+    void startScanning(f);
   };
 
-  const startScanning = async () => {
-    await new Promise(r => setTimeout(r, 800));
-    setScanStatus("scanning");
-    for (let i = 0; i < scanSteps.length; i++) {
-      setScanStep(i);
-      setProgress(Math.round(((i + 1) / scanSteps.length) * 100));
-      await new Promise(r => setTimeout(r, 700 + Math.random() * 400));
+  const startScanning = async (image: File) => {
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      if (!token) throw new Error("Please sign in before uploading a prescription.");
+
+      const formData = new FormData();
+      formData.append("file", image);
+      const uploadResponse = await fetch("/api/prescriptions/upload", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      });
+      const uploadResult = await uploadResponse.json().catch(() => null);
+      if (!uploadResponse.ok || !uploadResult?.success || !uploadResult.data?.id) {
+        throw new Error(uploadResult?.message || "Prescription upload failed.");
+      }
+
+      const prescriptionId = uploadResult.data.id;
+      setScanStatus("scanning");
+
+      for (let attempt = 0; attempt < 90; attempt += 1) {
+        const statusToken = await auth.currentUser?.getIdToken();
+        if (!statusToken) throw new Error("Your session expired. Please sign in again.");
+
+        const statusResponse = await fetch(`/api/prescriptions/${prescriptionId}`, {
+          headers: { Authorization: `Bearer ${statusToken}` },
+        });
+        const statusResult = await statusResponse.json().catch(() => null);
+        if (!statusResponse.ok || !statusResult?.success || !statusResult.data) {
+          throw new Error(statusResult?.message || "Unable to read OCR results.");
+        }
+
+        const result = statusResult.data;
+        const processingStatus = result.processing_status as string;
+        const stepIndex = processingStatus === "ocr_processing" ? 1
+          : processingStatus === "ai_processing" ? 3
+            : processingStatus === "matching" ? 4
+              : processingStatus === "completed" || processingStatus === "partial" ? 5
+                : 0;
+        setScanStep(stepIndex);
+        setProgress(Math.min(95, Math.max(10, Math.round(((attempt + 1) / 90) * 100))));
+
+        if (processingStatus === "failed") {
+          throw new Error(result.last_error || "We could not read this prescription. Please try a clearer image.");
+        }
+
+        if (processingStatus === "completed" || processingStatus === "partial") {
+          const medicines = Array.isArray(result.extracted_medicines) ? result.extracted_medicines : [];
+          setParsedMedicines(medicines.map((medicine: any) => {
+            const rawConfidence = Number(medicine.confidence || 0);
+            const confidence = Math.round(rawConfidence <= 1 ? rawConfidence * 100 : rawConfidence);
+            return {
+              name: medicine.medicine_name || medicine.raw_text || "Unidentified medicine",
+              dosage: medicine.dosage || "Not detected",
+              frequency: medicine.frequency || "Not detected",
+              duration: medicine.duration || "Not detected",
+              status: confidence >= 90 ? "confirmed" : confidence >= 60 ? "lowConfidence" : "unmatched",
+              confidence,
+            };
+          }));
+          setDoctorName(result.doctor_name || null);
+          setHospitalName(result.hospital_name || null);
+          const rawOverallConfidence = Number(result.overall_confidence || 0);
+          setOverallConfidence(Math.round(rawOverallConfidence <= 1 ? rawOverallConfidence * 100 : rawOverallConfidence));
+          setProgress(100);
+          setScanStep(scanSteps.length - 1);
+          setScanStatus("done");
+          return;
+        }
+
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+
+      throw new Error("OCR is taking longer than expected. Please check My Prescriptions shortly.");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Prescription OCR failed.";
+      setScanError(message);
+      setScanStatus("error");
+      toast.error(message);
     }
-    setScanStatus("done");
   };
 
   const onDrop = useCallback((e: React.DragEvent) => {
@@ -82,7 +171,7 @@ export default function PrescriptionUpload() {
                 </div>
                 <h3 className="font-semibold text-foreground mb-2">Drop your prescription here</h3>
                 <p className="text-sm text-muted-foreground mb-4">or click to browse files</p>
-                <p className="text-xs text-muted-foreground">Supports JPG, PNG, PDF · Max 10MB</p>
+                <p className="text-xs text-muted-foreground">Supports JPG or PNG · Max 10MB</p>
 
                 <div className="mt-6 flex items-center gap-2 justify-center">
                   <Zap className="w-4 h-4 text-ai" />
@@ -110,12 +199,22 @@ export default function PrescriptionUpload() {
                     </div>
                   )}
 
+                  {scanStatus === "error" && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-destructive/10 p-6 text-center">
+                      <div className="bg-white rounded-2xl p-4 shadow-lg">
+                        <AlertTriangle className="w-5 h-5 text-destructive mx-auto mb-2" />
+                        <p className="font-semibold text-destructive text-sm">OCR failed</p>
+                        <p className="text-xs text-muted-foreground mt-1">{scanError}</p>
+                      </div>
+                    </div>
+                  )}
+
                   <button onClick={() => { setFile(null); setPreview(null); setScanStatus("idle"); }} className="absolute top-3 right-3 w-8 h-8 bg-white rounded-full shadow-md flex items-center justify-center hover:bg-muted transition-colors">
                     <X className="w-4 h-4 text-foreground" />
                   </button>
                 </div>
 
-                {scanStatus !== "idle" && scanStatus !== "done" && (
+                {scanStatus !== "idle" && scanStatus !== "done" && scanStatus !== "error" && (
                   <div className="p-4 border-t border-border">
                     <div className="flex justify-between text-xs mb-2">
                       <span className="text-muted-foreground font-medium">{scanSteps[scanStep]}</span>
@@ -130,12 +229,12 @@ export default function PrescriptionUpload() {
                 {scanStatus === "done" && (
                   <div className="p-4 border-t border-border flex items-center justify-between">
                     <div>
-                      <p className="text-sm font-semibold text-foreground">Dr. Ananya Sharma</p>
-                      <p className="text-xs text-muted-foreground">Apollo Hospitals, Mumbai</p>
+                      <p className="text-sm font-semibold text-foreground">{doctorName || "Doctor not detected"}</p>
+                      <p className="text-xs text-muted-foreground">{hospitalName || "Hospital not detected"}</p>
                     </div>
                     <div className="text-right">
                       <p className="text-xs text-muted-foreground">Overall confidence</p>
-                      <p className="font-bold text-success">94.2%</p>
+                      <p className="font-bold text-success">{overallConfidence ?? 0}%</p>
                     </div>
                   </div>
                 )}
@@ -189,6 +288,13 @@ export default function PrescriptionUpload() {
             <AnimatePresence>
               {scanStatus === "done" && (
                 <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-3">
+                  {parsedMedicines.length === 0 && (
+                    <div className="bg-card border border-card-border rounded-[20px] p-5 text-center">
+                      <AlertTriangle className="w-5 h-5 text-warning mx-auto mb-2" />
+                      <p className="text-sm font-medium text-foreground">No medicines detected</p>
+                      <p className="text-xs text-muted-foreground mt-1">Try uploading a sharper, well-lit prescription image.</p>
+                    </div>
+                  )}
                   {parsedMedicines.map((med, i) => (
                     <motion.div key={med.name} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.1 }} className="bg-card border border-card-border rounded-[20px] p-4">
                       <div className="flex items-start justify-between gap-3">
@@ -224,12 +330,14 @@ export default function PrescriptionUpload() {
                     </motion.div>
                   ))}
 
-                  <Link href="/patient/search">
-                    <Button className="w-full h-12 rounded-[18px] font-semibold mt-2 gap-2">
-                      <Search className="w-4 h-4" />
-                      Search All {parsedMedicines.length} Medicines
-                    </Button>
-                  </Link>
+                  {parsedMedicines.length > 0 && (
+                    <Link href="/patient/search">
+                      <Button className="w-full h-12 rounded-[18px] font-semibold mt-2 gap-2">
+                        <Search className="w-4 h-4" />
+                        Search All {parsedMedicines.length} Medicines
+                      </Button>
+                    </Link>
+                  )}
                 </motion.div>
               )}
             </AnimatePresence>

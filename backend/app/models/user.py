@@ -428,6 +428,8 @@ class TokenType(str, Enum):
     EMAIL_VERIFICATION = "email_verification"
     PHONE_VERIFICATION = "phone_verification"
     PASSWORD_RESET = "password_reset"
+    LOGIN_OTP = "login_otp"
+    TWO_FACTOR_OTP = "two_factor_otp"
 
 
 class VerificationToken(BaseDocument):

@@ -31,14 +31,19 @@ aiofiles
 python-magic
 cloudinary
 
-easyocr
 paddleocr
-pytesseract
+paddlepaddle-gpu==3.3.0
 google-cloud-vision
 azure-cognitiveservices-vision-computervision
 
 opencv-python-headless
 numpy
+
+# Local GPU embedding/RAG stack. PaddleOCR runs in a separate process because
+# the installed Paddle and Torch CUDA runtimes cannot share Windows DLLs.
+torch
+sentence-transformers
+redisvl
 
 openai
 google-generativeai

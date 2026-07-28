@@ -6,10 +6,41 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from app.core.responses import APIResponse
-from app.dependencies.auth import get_current_active_user
+from app.dependencies.auth import get_current_active_user, require_admin
 from app.models.user import Address, AddressType, Patient, Pharmacy, User
+from app.services.auth_service import AuthService
 
 router = APIRouter(prefix="/users", tags=["Users"])
+_auth_service = AuthService()
+
+
+@router.get("/admin-list", response_model=APIResponse[list[dict]], summary="List users for administrators")
+async def list_users_for_admin(user: User = Depends(require_admin)) -> APIResponse:
+    from app.models.order import Order
+
+    users = await User.find(User.is_deleted == False).sort([("created_at", -1)]).to_list()  # noqa: E712
+    orders = await Order.find(Order.is_deleted == False).to_list()  # noqa: E712
+    order_counts: dict[str, int] = {}
+    for order in orders:
+        order_counts[order.patient_id] = order_counts.get(order.patient_id, 0) + 1
+
+    return APIResponse.ok(
+        data=[
+            {
+                "id": item.id,
+                "name": item.full_name,
+                "email": item.email,
+                "phone": item.phone,
+                "role": item.role.value if hasattr(item.role, "value") else str(item.role),
+                "isVerified": item.email_verified,
+                "orders": order_counts.get(item.id, 0),
+                "city": "",
+                "state": "",
+            }
+            for item in users
+        ],
+        message="Users retrieved.",
+    )
 
 
 class AddressCreateRequest(BaseModel):
@@ -96,6 +127,7 @@ async def get_me(user: User = Depends(get_current_active_user)) -> APIResponse:
             "address": address,
             "avatarUrl": user.profile_photo_url,
             "isVerified": user.email_verified,
+            "twoFactorEnabled": user.two_factor_enabled,
             "createdAt": user.created_at,
         },
         message="User profile retrieved.",
@@ -108,8 +140,16 @@ async def update_me(body: dict[str, Any], user: User = Depends(get_current_activ
         user.full_name = name
     if phone := body.get("phone"):
         user.phone = phone
+    if "two_factor_enabled" in body:
+        user.two_factor_enabled = bool(body.get("two_factor_enabled"))
     await user.save()
     return await get_me(user=user)
+
+
+@router.delete("/me", response_model=APIResponse[None], summary="Delete current user account")
+async def delete_me(user: User = Depends(get_current_active_user)) -> APIResponse:
+    await _auth_service.delete_account(user.id)
+    return APIResponse.ok(message="Account deleted.")
 
 
 @router.get("/me/addresses", response_model=APIResponse[list], summary="Get saved addresses")

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import time
-from typing import Optional
 
 from app.core.config import get_settings
 from app.core.exceptions import AIException
@@ -13,6 +12,7 @@ logger = get_logger(__name__)
 
 _EXTRACTION_PROMPT = """
 You are a medical prescription parser. Extract all medicines from the following OCR text from a prescription.
+Prefer the exact medicine name printed in the OCR text when it is visible. If the text shows a brand name, preserve it. If the text shows only a generic or composition, keep that name and strength exactly as written. Do not invent a different medicine name.
 
 Return a JSON object with this exact structure:
 {
@@ -49,11 +49,14 @@ class QwenProvider(BaseAIProvider):
         return "qwen"
 
     async def extract_prescription(
-        self, ocr_text: str, image_bytes: Optional[bytes] = None
+        self, ocr_text: str, image_bytes: bytes | None = None
     ) -> AIExtractionResult:
         from openai import AsyncOpenAI
         settings = get_settings()
-        
+        normalized_text = " ".join(ocr_text.split())
+        if len(normalized_text) > 5000:
+            normalized_text = normalized_text[:5000]
+
         # Configure client for local endpoint
         client = AsyncOpenAI(
             base_url=settings.QWEN_BASE_URL,
@@ -67,13 +70,16 @@ class QwenProvider(BaseAIProvider):
                 messages=[
                     {
                         "role": "user",
-                        "content": _EXTRACTION_PROMPT.format(ocr_text=ocr_text),
+                        # The prompt contains a literal JSON example. Replace
+                        # only the OCR placeholder so JSON braces are not
+                        # treated as Python format fields.
+                        "content": _EXTRACTION_PROMPT.replace("{ocr_text}", normalized_text),
                     }
                 ],
                 temperature=0.1, # Lower temperature for better JSON generation
                 top_p=1,
                 response_format={"type": "json_object"},
-                max_tokens=8192,
+                max_tokens=2048,
             )
 
             raw = response.choices[0].message.content or "{}"

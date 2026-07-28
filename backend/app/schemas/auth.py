@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import re
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Literal
 
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
@@ -76,6 +76,27 @@ class FirebaseLoginRequest(BaseModel):
     device_fingerprint: str = ""
 
 
+class EmailOtpRequest(BaseModel):
+    email: EmailStr
+    role: Optional[str] = None
+    purpose: Literal["login", "two_factor", "email_2fa"] = "login"
+
+
+class VerifyEmailOtpRequest(BaseModel):
+    email: EmailStr
+    otp: str = Field(min_length=6, max_length=6)
+    role: Optional[str] = None
+    purpose: Literal["login", "two_factor", "email_2fa"] = "login"
+
+
+class EmailOtpResponse(BaseModel):
+    firebase_custom_token: Optional[str] = None
+    user_id: str
+    role: str
+    email: str
+    full_name: str
+
+
 class FirebaseRegisterRequest(BaseModel):
     id_token: str = Field(description="Firebase ID token from the frontend")
     full_name: str = Field(default="", description="User's full name")
@@ -105,15 +126,19 @@ class SendVerificationRequest(BaseModel):
 
 
 class VerifyEmailRequest(BaseModel):
-    token: str = Field(min_length=10)
+    token: str = Field(min_length=6, max_length=6)
 
 
 class RequestPasswordResetRequest(BaseModel):
     email: EmailStr
 
 
+class VerifyPasswordResetRequest(BaseModel):
+    token: str = Field(min_length=6, max_length=6)
+
+
 class ResetPasswordRequest(BaseModel):
-    token: str
+    token: str = Field(min_length=6, max_length=6)
     new_password: str = Field(min_length=8, max_length=128)
     confirm_password: str
 
@@ -144,6 +169,7 @@ class TokenResponse(BaseModel):
     refresh_token: str
     token_type: str = "bearer"
     expires_in: int
+    firebase_custom_token: Optional[str] = None
     user_id: str
     role: str
     email: str

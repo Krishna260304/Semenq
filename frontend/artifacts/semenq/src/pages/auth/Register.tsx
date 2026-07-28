@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "wouter";
-import { Activity, ArrowRight, ArrowLeft, Check, User, Building2, Eye, EyeOff } from "lucide-react";
+import { Activity, ArrowRight, ArrowLeft, Check, User, Building2, Eye, EyeOff, MapPin, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -8,12 +8,41 @@ import { HumanCheck, createCaptchaChallenge, isCaptchaSolved } from "@/component
 import { PhoneNumberField } from "@/components/PhoneNumberField";
 import { auth } from "@/lib/firebase";
 import { composePhoneNumber, getAuthErrorMessage, getRoleDashboardPath, isValidPhoneNumber, normalizeEmail, saveRegisteredUserRole } from "@/lib/auth";
-import { createUserWithEmailAndPassword, updateProfile } from "firebase/auth";
+import { createUserWithEmailAndPassword, signInWithEmailAndPassword, updateProfile } from "firebase/auth";
 import { toast } from "sonner";
 
 type Role = "patient" | "pharmacy" | null;
 
-const indianStates = ["Andhra Pradesh", "Delhi", "Gujarat", "Karnataka", "Kerala", "Madhya Pradesh", "Maharashtra", "Rajasthan", "Tamil Nadu", "Telangana", "Uttar Pradesh", "West Bengal"];
+const indianStates = [
+  "Andhra Pradesh",
+  "Arunachal Pradesh",
+  "Assam",
+  "Bihar",
+  "Chhattisgarh",
+  "Goa",
+  "Gujarat",
+  "Haryana",
+  "Himachal Pradesh",
+  "Jharkhand",
+  "Karnataka",
+  "Kerala",
+  "Madhya Pradesh",
+  "Maharashtra",
+  "Manipur",
+  "Meghalaya",
+  "Mizoram",
+  "Nagaland",
+  "Odisha",
+  "Punjab",
+  "Rajasthan",
+  "Sikkim",
+  "Tamil Nadu",
+  "Telangana",
+  "Tripura",
+  "Uttar Pradesh",
+  "Uttarakhand",
+  "West Bengal",
+];
 
 export default function Register() {
   const [role, setRole] = useState<Role>(null);
@@ -37,6 +66,73 @@ export default function Register() {
     businessName: "",
     licenseNumber: "",
   });
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [fetchingLocation, setFetchingLocation] = useState(false);
+
+  const fetchLiveLocation = () => {
+    setFetchingLocation(true);
+
+    const fallbackToIP = async () => {
+      try {
+        const res = await fetch("https://ipapi.co/json/");
+        const data = await res.json();
+        if (data && !data.error) {
+          setForm(prev => ({
+            ...prev,
+            city: data.city || prev.city,
+            state: data.region || prev.state,
+            pincode: data.postal || prev.pincode
+          }));
+          toast.success("Location estimated from IP address");
+        } else {
+          toast.error("Could not determine location");
+        }
+      } catch (e) {
+        toast.error("Failed to get location");
+      } finally {
+        setFetchingLocation(false);
+      }
+    };
+
+    if (!navigator.geolocation || window.isSecureContext === false) {
+      toast.info("Precise location unavailable, estimating from network...");
+      fallbackToIP();
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        try {
+          const res = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${position.coords.latitude}&lon=${position.coords.longitude}&format=json`);
+          const data = await res.json();
+          if (data && data.address) {
+            const { road, suburb, city, state, postcode, county } = data.address;
+            const addressParts = [road, suburb, county].filter(Boolean);
+            setForm(prev => ({ 
+              ...prev, 
+              address: addressParts.join(", "),
+              city: city || prev.city,
+              state: state || prev.state,
+              pincode: postcode || prev.pincode
+            }));
+            toast.success("Location fetched successfully");
+          } else {
+            toast.error("Could not determine address from location");
+          }
+        } catch (error) {
+          toast.error("Failed to fetch address details");
+        } finally {
+          setFetchingLocation(false);
+        }
+      },
+      (error) => {
+        console.error("Geolocation error:", error);
+        toast.info("Location access denied, estimating from network...");
+        fallbackToIP();
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  };
 
   const update = (k: string, v: string) => setForm(prev => ({ ...prev, [k]: v }));
   const refreshCaptcha = () => {
@@ -47,44 +143,81 @@ export default function Register() {
   const totalSteps = role === "patient" ? 3 : 3;
 
   const validateCurrentStep = () => {
+    setFieldErrors({});
     if (!role) return false;
 
     if (step === 1) {
       const phone = composePhoneNumber(form.phoneDialCode, form.phoneNumber);
       const phoneIsValid = isValidPhoneNumber(phone);
-      const missingPatientInfo = role === "patient" && (!form.name.trim() || !form.email.trim() || !phoneIsValid);
-      const missingPharmacyInfo = role === "pharmacy" && (!form.businessName.trim() || !form.name.trim() || !form.licenseNumber.trim() || !form.email.trim() || !phoneIsValid);
+      if (role === "patient") {
+        if (!form.name.trim()) {
+          setFieldErrors({ name: "Please enter your full name." });
+          return false;
+        }
+        if (!form.email.trim()) {
+          setFieldErrors({ email: "Please enter your email address." });
+          return false;
+        }
+        if (!phoneIsValid) {
+          setFieldErrors({ phone: "Please enter a valid phone number with country code." });
+          return false;
+        }
+      }
 
-      if (missingPatientInfo || missingPharmacyInfo) {
-        toast.error("Please complete all required account details.");
-        return false;
+      if (role === "pharmacy") {
+        if (!form.businessName.trim()) {
+          setFieldErrors({ businessName: "Please enter your business name." });
+          return false;
+        }
+        if (!form.name.trim()) {
+          setFieldErrors({ name: "Please enter the owner name." });
+          return false;
+        }
+        if (!form.licenseNumber.trim()) {
+          setFieldErrors({ licenseNumber: "Please enter your license number." });
+          return false;
+        }
+        if (!form.email.trim()) {
+          setFieldErrors({ email: "Please enter your email address." });
+          return false;
+        }
+        if (!phoneIsValid) {
+          setFieldErrors({ phone: "Please enter a valid phone number with country code." });
+          return false;
+        }
       }
     }
 
-    if (step === 2 && (!form.address.trim() || !form.city.trim() || !form.state.trim() || !form.pincode.trim())) {
-      toast.error("Please complete your address details.");
-      return false;
+    if (step === 2) {
+      if (!form.address.trim() || !form.city.trim() || !form.state.trim() || !form.pincode.trim()) {
+        setFieldErrors({ address: "Please complete your address details." });
+        return false;
+      }
     }
 
     if (step === 3) {
       if (form.password.length < 8) {
-        toast.error("Password must be at least 8 characters.");
+        setFieldErrors({ password: "Password must be at least 8 characters." });
         return false;
       }
 
       if (form.password !== confirmPassword) {
-        toast.error("Passwords do not match.");
+        setFieldErrors({ password: "Passwords do not match." });
         return false;
       }
 
       if (!termsAccepted) {
-        toast.error("Please accept the Terms of Service and Privacy Policy.");
+        setFieldErrors({ terms: "Please accept the Terms of Service and Privacy Policy." });
+        return false;
+      }
+
+      if (!captchaAnswer.trim()) {
+        setFieldErrors({ captcha: "Enter the answer to the human check." });
         return false;
       }
 
       if (!isCaptchaSolved(captcha, captchaAnswer)) {
-        toast.error("Captcha answer is incorrect. Please try the new challenge.");
-        refreshCaptcha();
+        setFieldErrors({ captcha: "That answer is incorrect. Please try again." });
         return false;
       }
     }
@@ -103,22 +236,83 @@ export default function Register() {
 
     setLoading(true);
     try {
-      const credential = await createUserWithEmailAndPassword(auth, normalizeEmail(form.email), form.password);
+      const email = normalizeEmail(form.email);
+      let credential;
+
+      try {
+        credential = await createUserWithEmailAndPassword(auth, email, form.password);
+      } catch (error) {
+        // If a previous attempt created the Firebase credential but the API was
+        // unavailable, allow this retry to finish syncing that account.
+        if ((error as { code?: string })?.code !== "auth/email-already-in-use") {
+          throw error;
+        }
+        credential = await signInWithEmailAndPassword(auth, email, form.password);
+      }
+
       const displayName = role === "patient" ? form.name.trim() : form.businessName.trim();
       const phone = composePhoneNumber(form.phoneDialCode, form.phoneNumber);
 
       await updateProfile(credential.user, { displayName });
-      saveRegisteredUserRole(credential.user.uid, form.email, role, phone);
 
+      // Force the client to mint a fresh Firebase ID token after profile updates.
+      await credential.user.reload();
+
+      const submitRegistration = async (idToken: string) =>
+        fetch("/api/auth/register/firebase", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            id_token: idToken,
+            full_name: displayName,
+            email,
+            phone,
+            role,
+            address: form.address,
+            street: form.address,
+            city: form.city,
+            state: form.state,
+            pincode: form.pincode,
+            license_number: role === "pharmacy" ? form.licenseNumber : undefined,
+          }),
+        });
+
+      const idToken = await credential.user.getIdToken(true);
+      let response = await submitRegistration(idToken);
+      let result = await response.json().catch(() => null);
+
+      if (
+        response.status === 401 &&
+        typeof result?.detail === "string" &&
+        result.detail.toLowerCase().includes("firebase id token")
+      ) {
+        const refreshedToken = await credential.user.getIdToken(true);
+        response = await submitRegistration(refreshedToken);
+        result = await response.json().catch(() => null);
+      }
+
+      if (!response.ok || !result?.success) {
+        throw new Error(result?.message || result?.detail || "Unable to finish setting up your account. Please try again.");
+      }
+
+      saveRegisteredUserRole(credential.user.uid, form.email, role, phone);
       toast.success("Account created successfully.");
       window.location.assign(getRoleDashboardPath(role));
     } catch (error) {
-      toast.error(getAuthErrorMessage(error));
+      const code = (error as any)?.code;
+      if (code === "auth/invalid-email") {
+        setFieldErrors({ email: "Please enter a valid email address." });
+      } else {
+        setFieldErrors({
+          general: error instanceof Error && !code ? error.message : getAuthErrorMessage(error),
+        });
+      }
       refreshCaptcha();
     } finally {
       setLoading(false);
     }
   };
+
 
   const ProgressStep = ({ num, label }: { num: number; label: string }) => (
     <div className="flex items-center gap-2">
@@ -208,7 +402,7 @@ export default function Register() {
         </Link>
         <div className="relative">
           <h2 className="text-3xl font-bold text-white mb-4">
-            {role === "patient" ? "Join 2.4 million patients who never worry about medicines." : "Grow your pharmacy with AI-powered intelligence."}
+            {role === "patient" ? "Find medicines and manage your prescriptions with confidence." : "Grow your pharmacy with AI-powered intelligence."}
           </h2>
           <p className="text-white/70">
             {role === "patient" ? "Find any medicine, anywhere in India. Upload prescriptions, reserve, and get delivered." : "Real-time demand forecasting, automated reservations, and national reach."}
@@ -227,6 +421,9 @@ export default function Register() {
 
       <div className="flex-1 flex items-center justify-center p-8">
         <div className="w-full max-w-md">
+          {fieldErrors.general ? (
+            <div className="mb-4 p-3 rounded-md bg-destructive/10 border border-destructive text-destructive text-sm">{fieldErrors.general}</div>
+          ) : null}
           <div className="flex items-center gap-4 mb-8">
             {steps.map((s, i) => (
               <div key={s.label} className="flex items-center gap-2">
@@ -249,10 +446,12 @@ export default function Register() {
                 <div className="space-y-2">
                   <Label>Full Name</Label>
                   <Input placeholder="Full name" value={form.name} onChange={e => update("name", e.target.value)} className="h-11 rounded-[16px]" />
+                  {fieldErrors.name ? <p className="text-destructive text-sm mt-1">{fieldErrors.name}</p> : null}
                 </div>
                 <div className="space-y-2">
                   <Label>Email</Label>
                   <Input type="email" placeholder="name@example.com" value={form.email} onChange={e => update("email", e.target.value)} className="h-11 rounded-[16px]" />
+                  {fieldErrors.email ? <p className="text-destructive text-sm mt-1">{fieldErrors.email}</p> : null}
                 </div>
                 <PhoneNumberField
                   label="Phone"
@@ -262,6 +461,7 @@ export default function Register() {
                   onDialCodeChange={value => update("phoneDialCode", value)}
                   onPhoneNumberChange={value => update("phoneNumber", value)}
                 />
+                {fieldErrors.phone ? <p className="text-destructive text-sm mt-1">{fieldErrors.phone}</p> : null}
               </>
             )}
 
@@ -284,6 +484,7 @@ export default function Register() {
                 <div className="space-y-2">
                   <Label>Email</Label>
                   <Input type="email" placeholder="name@example.com" value={form.email} onChange={e => update("email", e.target.value)} className="h-11 rounded-[16px]" />
+                  {fieldErrors.email ? <p className="text-destructive text-sm mt-1">{fieldErrors.email}</p> : null}
                 </div>
                 <PhoneNumberField
                   label="Phone"
@@ -293,6 +494,7 @@ export default function Register() {
                   onDialCodeChange={value => update("phoneDialCode", value)}
                   onPhoneNumberChange={value => update("phoneNumber", value)}
                 />
+                {fieldErrors.phone ? <p className="text-destructive text-sm mt-1">{fieldErrors.phone}</p> : null}
               </>
             )}
 
@@ -300,7 +502,19 @@ export default function Register() {
               <>
                 <div className="space-y-2">
                   <Label>Full Address</Label>
-                  <Input placeholder="Full address" value={form.address} onChange={e => update("address", e.target.value)} className="h-11 rounded-[16px]" />
+                  <div className="relative">
+                    <Input placeholder="Full address" value={form.address} onChange={e => update("address", e.target.value)} className="h-11 rounded-[16px] pr-12" />
+                    <button 
+                      type="button" 
+                      onClick={fetchLiveLocation} 
+                      disabled={fetchingLocation}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-primary hover:text-primary/80 disabled:opacity-50"
+                      title="Fetch live location"
+                    >
+                      {fetchingLocation ? <Loader2 className="w-5 h-5 animate-spin" /> : <MapPin className="w-5 h-5" />}
+                    </button>
+                  </div>
+                  {fieldErrors.address ? <p className="text-destructive text-sm mt-1">{fieldErrors.address}</p> : null}
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
@@ -349,6 +563,7 @@ export default function Register() {
                     onChange={e => setConfirmPassword(e.target.value)}
                     className="h-11 rounded-[16px]"
                   />
+                  {fieldErrors.password ? <p className="text-destructive text-sm mt-1">{fieldErrors.password}</p> : null}
                 </div>
                 <div className="text-xs text-muted-foreground flex items-start gap-2">
                   <input
@@ -359,12 +574,14 @@ export default function Register() {
                   />
                   <span>I agree to Semenq's Terms of Service and Privacy Policy.</span>
                 </div>
+                {fieldErrors.terms ? <p className="text-destructive text-sm mt-1">{fieldErrors.terms}</p> : null}
                 <HumanCheck
                   inputId="register-captcha"
                   challenge={captcha}
                   answer={captchaAnswer}
                   onAnswerChange={setCaptchaAnswer}
                   onRefresh={refreshCaptcha}
+                  error={fieldErrors.captcha}
                 />
               </>
             )}

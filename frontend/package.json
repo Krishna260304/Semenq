@@ -4,7 +4,7 @@
   "license": "MIT",
   "scripts": {
     "preinstall": "npx only-allow pnpm",
-    "dev": "npx vite --config artifacts/semenq/vite.config.ts --host 0.0.0.0",
+    "dev": "node artifacts/semenq/node_modules/vite/bin/vite.js --config artifacts/semenq/vite.config.ts --host 0.0.0.0",
     "dev:api": "npx cross-env NODE_ENV=development node artifacts/api-server/build.mjs && node --enable-source-maps artifacts/api-server/dist/index.mjs",
     "build": "pnpm run typecheck && pnpm -r --if-present run build",
     "typecheck:libs": "tsc --build",
@@ -17,5 +17,8 @@
     "lightningcss-win32-x64-msvc": "^1.32.0",
     "prettier": "^3.8.4",
     "typescript": "~5.9.3"
+  },
+  "dependencies": {
+    "firebase": "^12.15.0"
   }
 }
