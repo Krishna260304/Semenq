@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 import hmac
@@ -50,20 +49,13 @@ class PaymentService:
             "patient_id": str(patient_id),
             "pharmacy_id": str(reservation.pharmacy_id),
         }
-        # order_result = await self._provider.create_order(
-        #     amount_inr=reservation.grand_total,
-        #     currency="INR",
-        #     receipt=f"rcpt_{reservation.reservation_number}",
-        #     notes=notes,
-        # )
-        
-        # --- DEVELOPMENT BYPASS ---
-        class MockOrderResult:
-            order_id = f"pay_{reservation.id[:10]}"
-            amount = int(reservation.grand_total * 100)
-            currency = "INR"
-        order_result = MockOrderResult()
-        # --------------------------
+
+        order_result = await self._provider.create_order(
+            amount_inr=reservation.grand_total,
+            currency="INR",
+            receipt=f"rcpt_{reservation.reservation_number}",
+            notes=notes,
+        )
 
         payment = Payment(
             reservation_id=reservation.id,
@@ -97,30 +89,23 @@ class PaymentService:
             raise PaymentFailedException("Payment order not found.")
 
         if payment.status in (PaymentStatus.CAPTURED, PaymentStatus.AUTHORIZED):
-            return payment  # Idempotent
+            return payment
 
-        # verify_result = await self._provider.verify_payment(
-        #     order_id=razorpay_order_id,
-        #     payment_id=razorpay_payment_id,
-        #     signature=razorpay_signature,
-        # )
-        # 
-        # if not verify_result.is_valid:
-        #     payment.status = PaymentStatus.FAILED
-        #     payment.failed_at = _utcnow()
-        #     payment.failure_reason = verify_result.error
-        #     await payment.save()
-        # 
-        #     await self._record_transaction(payment, "failed", verify_result.error)
-        # 
-        #     raise PaymentVerificationException(verify_result.error or "Signature verification failed.")
-        
-        # --- DEVELOPMENT BYPASS ---
-        class MockVerifyResult:
-            is_valid = True
-            error = None
-        verify_result = MockVerifyResult()
-        # --------------------------
+        verify_result = await self._provider.verify_payment(
+            order_id=razorpay_order_id,
+            payment_id=razorpay_payment_id,
+            signature=razorpay_signature,
+        )
+
+        if not verify_result.is_valid:
+            payment.status = PaymentStatus.FAILED
+            payment.failed_at = _utcnow()
+            payment.failure_reason = verify_result.error
+            await payment.save()
+
+            await self._record_transaction(payment, "failed", verify_result.error)
+
+            raise PaymentVerificationException(verify_result.error or "Signature verification failed.")
 
         payment.provider_payment_id = razorpay_payment_id
         payment.provider_signature = razorpay_signature
@@ -195,7 +180,7 @@ class PaymentService:
 
         existing_refund = await PaymentRefund.find_one(PaymentRefund.payment_id == payment.id)
         if existing_refund:
-            return existing_refund  # Idempotent
+            return existing_refund
 
         refund = PaymentRefund(
             payment_id=payment.id,
@@ -208,17 +193,12 @@ class PaymentService:
         await refund.insert()
 
         try:
-            # result = await self._provider.refund(
-            #     payment_id=payment.provider_payment_id,
-            #     amount_inr=payment.amount,
-            #     notes={"reservation_id": reservation_id, "reason": reason},
-            # )
-            
-            # --- DEVELOPMENT BYPASS ---
-            class MockRefundResult:
-                refund_id = f"rfnd_{reservation_id[:10]}"
-            result = MockRefundResult()
-            # --------------------------
+            result = await self._provider.refund(
+                payment_id=payment.provider_payment_id,
+                amount_inr=payment.amount,
+                notes={"reservation_id": reservation_id, "reason": reason},
+            )
+
             refund.provider_refund_id = result.refund_id
             refund.status = RefundStatus.COMPLETED
             refund.processed_at = _utcnow()

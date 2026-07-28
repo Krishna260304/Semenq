@@ -21,8 +21,9 @@ from app.models.prescription import (
     PrescriptionImage,
     PrescriptionStatus,
 )
-from app.providers.ai.groq_provider import GroqProvider
+from app.providers.ai.qwen_provider import QwenProvider
 from app.providers.ocr.easyocr_provider import EasyOCRProvider
+from app.providers.ocr.paddleocr_provider import PaddleOCRProvider
 from app.providers.storage.local_provider import LocalStorageProvider
 
 logger = get_logger(__name__)
@@ -36,8 +37,17 @@ def _utcnow() -> datetime:
 class PrescriptionService:
     def __init__(self) -> None:
         self._storage = LocalStorageProvider()
-        self._ocr = EasyOCRProvider()
-        self._ai = GroqProvider()
+        self._ocr = self._get_ocr_provider()
+        if settings.AI_PROVIDER == "qwen":
+            self._ai = QwenProvider()
+
+    def _get_ocr_provider(self):
+        provider = settings.OCR_PROVIDER.lower()
+        if provider == "paddleocr":
+            return PaddleOCRProvider()
+        if provider == "easyocr":
+            return EasyOCRProvider()
+        raise ValueError(f"Unsupported OCR_PROVIDER: {settings.OCR_PROVIDER}")
 
     async def upload_prescription(
         self, patient_id: str, image_bytes: bytes, filename: str, content_type: str
@@ -144,7 +154,7 @@ class PrescriptionService:
         ai_log = AILog(
             prescription_id=prescription.id,
             ai_provider=self._ai.provider_name,
-            model_name=settings.GROQ_MODEL,
+            model_name=settings.QWEN_MODEL,
         )
         await ai_log.insert()
         prescription.ai_log_id = ai_log.id

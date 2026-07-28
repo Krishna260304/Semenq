@@ -7,6 +7,7 @@ from app.core.middleware.request_id import REQUEST_ID_CTX
 from app.core.responses import APIResponse
 from app.dependencies.auth import require_patient, require_pharmacy_or_admin
 from app.models.user import User
+from app.models.order import Order
 from app.services.order_service import OrderService
 
 router = APIRouter(prefix="/orders", tags=["Orders & Courier"])

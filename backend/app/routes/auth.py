@@ -9,6 +9,7 @@ from app.dependencies.auth import get_current_active_user, get_token_payload
 from app.models.user import User
 from app.schemas.auth import (
     ChangePasswordRequest,
+    FirebaseRegisterRequest,
     LoginRequest,
     FirebaseLoginRequest,
     LogoutRequest,
@@ -99,6 +100,105 @@ async def register_pharmacy(
             message="Registration successful. Verify your email and await admin verification.",
         ),
         message="Pharmacy registration submitted. Pending admin verification.",
+        request_id=REQUEST_ID_CTX.get(""),
+    )
+
+
+@router.post(
+    "/register/firebase",
+    response_model=APIResponse[dict],
+    status_code=201,
+    summary="Sync Firebase user to MongoDB after client-side registration",
+)
+async def register_with_firebase(
+    body: FirebaseRegisterRequest,
+    request: Request,
+) -> APIResponse:
+    from app.security.firebase_auth import verify_firebase_token
+    from app.models.user import User, Patient, Pharmacy, Address, AddressType, UserRole, UserStatus, UserPreferences
+    from app.security.password_handler import hash_password
+    import secrets
+
+    try:
+        decoded = verify_firebase_token(body.id_token)
+    except ValueError as exc:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=401, detail=str(exc))
+
+    firebase_uid = decoded.get("uid", "")
+    firebase_email = decoded.get("email", "").lower().strip()
+    firebase_name = decoded.get("name") or body.full_name
+
+    email = firebase_email or body.email.lower().strip()
+    phone = body.phone
+    role_str = body.role
+
+    existing_user = await User.find_one(User.email == email)
+    if existing_user:
+        return APIResponse.ok(
+            data={"user_id": existing_user.id, "already_exists": True},
+            message="User already registered.",
+        )
+
+    dummy_password = secrets.token_urlsafe(32) + "!Aa1"
+    password_hash = hash_password(dummy_password)
+
+    role = UserRole.PATIENT
+    if role_str == "pharmacy":
+        role = UserRole.PHARMACY
+
+    user = User(
+        full_name=(firebase_name or body.full_name).strip(),
+        email=email,
+        phone=phone,
+        password_hash=password_hash,
+        role=role,
+        status=UserStatus.ACTIVE,
+        email_verified=True,
+    )
+    await user.insert()
+
+    prefs = UserPreferences(user_id=user.id)
+    await prefs.insert()
+    user.preferences_id = prefs.id
+    await user.save()
+
+    if role == UserRole.PATIENT:
+        patient = Patient(user_id=user.id)
+        await patient.insert()
+    elif role == UserRole.PHARMACY:
+        pharmacy = Pharmacy(
+            user_id=user.id,
+            pharmacy_name=body.full_name,
+            owner_name=body.full_name,
+            license_number=body.license_number or f"TEMP-{user.id}",
+            street=body.address or "",
+            city=body.city or "",
+            state=body.state or "",
+            pincode=body.pincode or "",
+        )
+        await pharmacy.insert()
+
+    if body.address or body.city or body.street:
+        street = body.street or body.address or ""
+        addr = Address(
+            user_id=user.id,
+            address_name="Home",
+            street=street,
+            area="",
+            city=body.city or "",
+            state=body.state or "",
+            pincode=body.pincode or "",
+            address_type=AddressType.HOME,
+            is_default=True,
+            latitude=body.latitude,
+            longitude=body.longitude,
+        )
+        await addr.insert()
+
+    return APIResponse.ok(
+        data={"user_id": user.id, "already_exists": False},
+        message="User profile synced successfully.",
         request_id=REQUEST_ID_CTX.get(""),
     )
 

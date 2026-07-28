@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 from fastapi import Depends
@@ -16,7 +15,32 @@ _auth_service = AuthService()
 async def get_token_payload(
     credentials: HTTPAuthorizationCredentials = Depends(_bearer),
 ) -> TokenPayload:
-    return decode_access_token(credentials.credentials)
+    token = credentials.credentials
+    try:
+        return decode_access_token(token)
+    except Exception:
+        from app.security.firebase_auth import verify_firebase_token
+        try:
+            decoded = verify_firebase_token(token)
+        except Exception:
+            from app.core.exceptions import InvalidTokenException
+            raise InvalidTokenException("Invalid or expired token.")
+        email = decoded.get("email", "").lower().strip()
+        user = None
+        if email:
+            user = await User.find_one(User.email == email)
+        if user is None:
+            from app.core.exceptions import InvalidTokenException
+            raise InvalidTokenException("User not found for this Firebase token.")
+        payload = TokenPayload({
+            "sub": user.id,
+            "role": user.role.value if hasattr(user.role, "value") else str(user.role),
+            "sid": "",
+            "jti": "",
+            "type": "access",
+            "exp": 9999999999,
+        })
+        return payload
 
 
 async def get_current_user(

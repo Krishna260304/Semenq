@@ -127,14 +127,7 @@ class OrderService:
         }
 
         try:
-            # result = await self._courier_provider.create_shipment(payload)
-            # --- DEVELOPMENT BYPASS ---
-            class MockShipmentResult:
-                shipment_id = f"ship_{order.order_number}"
-                awb_code = f"AWB{order.order_number}"
-                charges = 50.0
-            result = MockShipmentResult()
-            # --------------------------
+            result = await self._courier_provider.create_shipment(payload)
         except Exception as exc:
             logger.error("Courier request failed", error=str(exc))
             raise CourierException("Failed to request courier from provider.")
@@ -166,15 +159,7 @@ class OrderService:
         if not shipment:
             return None
 
-        # result = await self._courier_provider.track_shipment(awb_code)
-        # --- DEVELOPMENT BYPASS ---
-        from app.providers.courier.shiprocket_provider import CourierTrackingResult, TrackingEvent
-        result = CourierTrackingResult(
-            awb_code=awb_code,
-            current_status="Delivered",
-            events=[TrackingEvent(status="Delivered", description="Delivered", location="Home", timestamp=_utcnow().isoformat())]
-        )
-        # --------------------------
+        result = await self._courier_provider.track_shipment(awb_code)
         
         latest_event = result.events[-1] if result.events else None
         if not latest_event:

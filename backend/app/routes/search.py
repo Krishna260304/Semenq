@@ -100,3 +100,58 @@ async def search_medicines(
         },
         message="Search completed.",
     )
+
+
+@router.get("/semantic", response_model=APIResponse[list[dict]], summary="Semantic search for medicines via RAG")
+async def semantic_search(
+    q: str = Query(..., description="Natural language search query (e.g. 'cream for rash')"),
+    top_k: int = Query(5, description="Number of results to return")
+) -> APIResponse:
+    from app.services.rag_service import RAGService
+    try:
+        rag = RAGService()
+        results = await rag.semantic_search_medicines(q, top_k)
+        
+        # results is a list of dicts from redisvl
+        formatted_results = []
+        for r in results:
+            formatted_results.append({
+                "medicine_id": r.get("medicine_id"),
+                "name": r.get("name"),
+                "composition": r.get("composition"),
+                "match_snippet": r.get("content")[:200] + "..." if r.get("content") else "",
+                "score": r.get("vector_distance")
+            })
+            
+        return APIResponse.ok(
+            data=formatted_results,
+            message="Semantic search completed."
+        )
+    except Exception as e:
+        return APIResponse.error(message=f"Semantic search failed: {str(e)}")
+
+@router.post("/index-medicines", summary="Admin trigger to reindex all medicines for semantic search")
+async def index_medicines() -> APIResponse:
+    from app.services.rag_service import RAGService
+    try:
+        rag = RAGService()
+        await rag.initialize()
+        count = await rag.index_all_medicines()
+        return APIResponse.ok(message=f"Successfully indexed {count} medicines for semantic search.")
+    except Exception as e:
+        return APIResponse.error(message=f"Indexing failed: {str(e)}")
+
+@router.get("/chat", response_model=APIResponse[dict], summary="RAG Chatbot Assistant")
+async def chat_assistant(
+    q: str = Query(..., description="Ask a medical question (e.g., 'What are the side effects of paracetamol?')")
+) -> APIResponse:
+    from app.services.rag_service import RAGService
+    try:
+        rag = RAGService()
+        answer = await rag.answer_medical_query(q)
+        return APIResponse.ok(
+            data={"question": q, "answer": answer},
+            message="Chat completed."
+        )
+    except Exception as e:
+        return APIResponse.error(message=f"Chat failed: {str(e)}")

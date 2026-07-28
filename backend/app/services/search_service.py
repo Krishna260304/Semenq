@@ -10,7 +10,7 @@ from app.core.logging.logger import get_logger
 from app.models.medicine import MedicineInventory
 from app.models.search import SearchResult, SearchScope, SearchSession, SearchSessionStatus
 from app.models.user import Pharmacy
-from app.providers.maps.google_maps_provider import GoogleMapsProvider
+from app.providers.maps.nominatim_provider import NominatimProvider
 
 logger = get_logger(__name__)
 
@@ -21,7 +21,8 @@ def _utcnow() -> datetime:
 
 class SearchService:
     def __init__(self) -> None:
-        self._maps = GoogleMapsProvider()
+        self._maps = NominatimProvider()
+
 
     async def init_search(
         self,

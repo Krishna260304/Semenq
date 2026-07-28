@@ -76,6 +76,22 @@ class FirebaseLoginRequest(BaseModel):
     device_fingerprint: str = ""
 
 
+class FirebaseRegisterRequest(BaseModel):
+    id_token: str = Field(description="Firebase ID token from the frontend")
+    full_name: str = Field(default="", description="User's full name")
+    email: str = Field(default="", description="User's email address")
+    phone: str = Field(default="", description="User's phone number with country code")
+    role: str = Field(default="patient", description="patient or pharmacy")
+    address: Optional[str] = None
+    street: Optional[str] = None
+    city: Optional[str] = None
+    state: Optional[str] = None
+    pincode: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    license_number: Optional[str] = None
+
+
 class RefreshTokenRequest(BaseModel):
     refresh_token: str
 

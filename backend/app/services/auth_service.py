@@ -360,7 +360,6 @@ class AuthService:
             logger.info("New phone number detected from Firebase. Auto-creating Patient account.", phone=phone)
             
             import secrets
-            # Append !Aa1 to guarantee it passes the strict password strength validation
             dummy_password = secrets.token_urlsafe(32) + "!Aa1"
             
             user, _, _ = await self.register_patient(
@@ -540,7 +539,7 @@ class AuthService:
     async def request_password_reset(self, email: str) -> Optional[str]:
         user = await self._users.get_by_email(email.lower())
         if not user:
-            return None   # Don't reveal account existence
+            return None
 
         raw_token, token_hash = create_verification_token()
         expiry = _utcnow() + timedelta(hours=1)

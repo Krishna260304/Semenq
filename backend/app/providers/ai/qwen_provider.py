@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 import json
@@ -44,31 +43,37 @@ Return only valid JSON. No explanations.
 """
 
 
-class GroqProvider(BaseAIProvider):
+class QwenProvider(BaseAIProvider):
     @property
     def provider_name(self) -> str:
-        return "groq"
+        return "qwen"
 
     async def extract_prescription(
         self, ocr_text: str, image_bytes: Optional[bytes] = None
     ) -> AIExtractionResult:
-        from groq import AsyncGroq
+        from openai import AsyncOpenAI
         settings = get_settings()
-        client = AsyncGroq(api_key=settings.GROQ_API_KEY)
+        
+        # Configure client for local endpoint
+        client = AsyncOpenAI(
+            base_url=settings.QWEN_BASE_URL,
+            api_key="ollama" # api key is often ignored by local endpoints but required by openai client
+        )
 
         start = time.perf_counter()
         try:
             response = await client.chat.completions.create(
-                model=settings.GROQ_MODEL,
+                model=settings.QWEN_MODEL,
                 messages=[
                     {
                         "role": "user",
                         "content": _EXTRACTION_PROMPT.format(ocr_text=ocr_text),
                     }
                 ],
-                temperature=0.0,
+                temperature=0.1, # Lower temperature for better JSON generation
+                top_p=1,
                 response_format={"type": "json_object"},
-                max_completion_tokens=8192,
+                max_tokens=8192,
             )
 
             raw = response.choices[0].message.content or "{}"
@@ -92,23 +97,27 @@ class GroqProvider(BaseAIProvider):
                 patient_name=parsed.get("patient_name"),
                 overall_confidence=parsed.get("overall_confidence", 0.0),
                 provider=self.provider_name,
-                model=settings.GROQ_MODEL,
+                model=settings.QWEN_MODEL,
                 execution_time_ms=elapsed_ms,
                 raw_response=raw,
                 estimated_tokens=tokens,
             )
 
         except json.JSONDecodeError as exc:
-            raise AIException(f"Groq returned invalid JSON: {exc}")
+            raise AIException(f"Qwen returned invalid JSON: {exc}")
         except Exception as exc:
-            logger.error("Groq extraction failed", error=str(exc))
-            raise AIException(f"Groq failed: {exc}")
+            logger.error("Qwen extraction failed", error=str(exc))
+            raise AIException(f"Qwen failed: {exc}")
 
     async def health_check(self) -> bool:
         try:
-            from groq import AsyncGroq
+            from openai import AsyncOpenAI
             settings = get_settings()
-            client = AsyncGroq(api_key=settings.GROQ_API_KEY)
+            client = AsyncOpenAI(
+                base_url=settings.QWEN_BASE_URL,
+                api_key="ollama"
+            )
+            # List models to verify connection
             await client.models.list()
             return True
         except Exception:

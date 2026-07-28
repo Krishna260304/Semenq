@@ -32,6 +32,7 @@ python-magic
 cloudinary
 
 easyocr
+paddleocr
 pytesseract
 google-cloud-vision
 azure-cognitiveservices-vision-computervision
@@ -83,4 +84,3 @@ pytz
 shortuuid
 ujson
 orjson
-groq

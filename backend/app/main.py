@@ -28,6 +28,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     await connect_database()
     await connect_redis()
     
+    import asyncio
+    from app.services.backup_service import restore_medicines_from_backup
+    asyncio.create_task(restore_medicines_from_backup())
+    
     logger.info("Application startup complete.")
     yield
     

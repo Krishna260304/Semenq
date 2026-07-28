@@ -17,6 +17,8 @@ class Environment(str, Enum):
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore",
     )
@@ -60,17 +62,14 @@ class Settings(BaseSettings):
     CLOUDINARY_FOLDER_MEDICINES: str = "semenq/medicines"
     CLOUDINARY_FOLDER_PROFILES: str = "semenq/profiles"
 
-    GOOGLE_MAPS_API_KEY: str = "your-google-maps-api-key"
-
-    OCR_PROVIDER: Literal["easyocr", "tesseract", "google_vision", "azure"] = "easyocr"
+    OCR_PROVIDER: Literal["easyocr", "paddleocr", "tesseract"] = "paddleocr"
     GOOGLE_VISION_CREDENTIALS_FILE: str = "/path/to/service-account.json"
     AZURE_OCR_ENDPOINT: str = "https://your-endpoint.cognitiveservices.azure.com/"
     AZURE_OCR_KEY: str = "your-azure-key"
 
-    AI_PROVIDER: Literal["openai", "gemini", "claude", "groq"] = "groq"
-    # Do NOT hardcode secrets. Provide via environment variables or a local .env file.
-    GROQ_API_KEY: str = ""
-    GROQ_MODEL: str = "openai/gpt-oss-120b"
+    AI_PROVIDER: Literal["openai", "gemini", "claude", "qwen"] = "qwen"
+    QWEN_BASE_URL: str = "http://localhost:11434/v1"
+    QWEN_MODEL: str = "qwen:8b"
     OPENAI_API_KEY: str = ""
     OPENAI_MODEL: str = "gpt-4o"
     GEMINI_API_KEY: str = ""
@@ -122,7 +121,7 @@ class Settings(BaseSettings):
 
     LOG_LEVEL: str = "INFO"
     LOG_FILE: str = "logs/semenq.log"
-    LOG_MAX_BYTES: int = 10_485_760  # 10 MB
+    LOG_MAX_BYTES: int = 10_485_760
     LOG_BACKUP_COUNT: int = 5
 
     SUPER_ADMIN_EMAIL: str = "admin@semenq.com"

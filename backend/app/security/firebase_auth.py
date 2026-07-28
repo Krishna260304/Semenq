@@ -28,15 +28,16 @@ def init_firebase() -> None:
             logger.error(f"Failed to initialize Firebase Admin: {e}")
 
 def verify_firebase_token(id_token: str) -> dict:
-    """
-    Verifies the Firebase ID token and returns the decoded payload.
-    """
+
     if not _firebase_app:
         init_firebase()
     
+    if not _firebase_app:
+        logger.error("Firebase is not initialized. Cannot verify token.")
+        raise ValueError("Firebase is not initialized.")
+        
     try:
-        decoded_token = auth.verify_id_token(id_token)
-        return decoded_token
+        return auth.verify_id_token(id_token)
     except Exception as e:
         logger.error(f"Firebase token verification failed: {e}")
         raise ValueError("Invalid Firebase ID token.")
