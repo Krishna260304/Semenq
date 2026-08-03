@@ -41,3 +41,10 @@ pnpm-debug.log
 # Replit
 .replit
 .replit-artifact/
+
+# Docker configuration files
+docker-compose.yml
+backend/Dockerfile
+backend/.dockerignore
+frontend/Dockerfile
+frontend/.dockerignore
