@@ -527,20 +527,39 @@ paths:
     get:
       operationId: getDemandForecast
       tags: [analytics]
-      summary: Get AI-powered demand forecast for pharmacy
+      summary: Get demand forecast for pharmacy inventory
       parameters:
         - name: days
           in: query
           schema: { type: integer, default: 30 }
       responses:
         "200":
-          description: Demand forecast data
+          description: Demand forecast data, when available
           content:
             application/json:
               schema:
                 type: array
                 items:
                   $ref: "#/components/schemas/DemandForecastItem"
+
+  /analytics/top-medicines:
+    get:
+      operationId: getTopMedicines
+      tags: [analytics]
+      summary: Get recorded top medicines
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, default: 10 }
+      responses:
+        "200":
+          description: Recorded sales rankings
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TopMedicine"
 
   /analytics/admin-dashboard:
     get:
@@ -554,25 +573,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/AdminDashboard"
-
-  /analytics/top-medicines:
-    get:
-      operationId: getTopMedicines
-      tags: [analytics]
-      summary: Get top searched/reserved medicines
-      parameters:
-        - name: limit
-          in: query
-          schema: { type: integer, default: 10 }
-      responses:
-        "200":
-          description: Top medicines
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/TopMedicine"
 
   /notifications:
     get:
@@ -947,6 +947,7 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/Reservation"
+
         topSellingMedicines:
           type: array
           items:
@@ -963,49 +964,6 @@ components:
         date: { type: string }
         revenue: { type: number }
         orders: { type: integer }
-
-    AdminDashboard:
-      type: object
-      required: [totalUsers, totalPharmacies, totalMedicines, totalOrders, monthlyRevenue, platformHealth]
-      properties:
-        totalUsers: { type: integer }
-        totalPharmacies: { type: integer }
-        totalMedicines: { type: integer }
-        totalOrders: { type: integer }
-        monthlyRevenue: { type: number }
-        activeReservations: { type: integer }
-        pendingVerifications: { type: integer }
-        platformHealth:
-          $ref: "#/components/schemas/PlatformHealth"
-        recentActivity:
-          type: array
-          items:
-            $ref: "#/components/schemas/ActivityEvent"
-        userGrowth:
-          type: array
-          items:
-            $ref: "#/components/schemas/RevenueDataPoint"
-
-    PlatformHealth:
-      type: object
-      required: [serverStatus, dbStatus, apiStatus, apiResponseTime, uptime]
-      properties:
-        serverStatus: { type: string, enum: [healthy, degraded, down] }
-        dbStatus: { type: string, enum: [healthy, degraded, down] }
-        apiStatus: { type: string, enum: [healthy, degraded, down] }
-        apiResponseTime: { type: number }
-        uptime: { type: number }
-        errorRate: { type: number }
-
-    ActivityEvent:
-      type: object
-      required: [id, type, description, timestamp]
-      properties:
-        id: { type: integer }
-        type: { type: string, enum: [userRegistered, pharmacyVerified, orderPlaced, paymentReceived, alert] }
-        description: { type: string }
-        timestamp: { type: string }
-        metadata: { type: string }
 
     DemandForecastItem:
       type: object
@@ -1034,6 +992,35 @@ components:
         revenue: { type: number }
         trend: { type: string, enum: [up, down, stable] }
         percentChange: { type: number }
+
+    AdminDashboard:
+      type: object
+      required: [totalUsers, totalPharmacies, totalMedicines, totalOrders, monthlyRevenue]
+      properties:
+        totalUsers: { type: integer }
+        totalPharmacies: { type: integer }
+        totalMedicines: { type: integer }
+        totalOrders: { type: integer }
+        monthlyRevenue: { type: number }
+        activeReservations: { type: integer }
+        pendingVerifications: { type: integer }
+        recentActivity:
+          type: array
+          items:
+            $ref: "#/components/schemas/ActivityEvent"
+        userGrowth:
+          type: array
+          items:
+            $ref: "#/components/schemas/RevenueDataPoint"
+    ActivityEvent:
+      type: object
+      required: [id, type, description, timestamp]
+      properties:
+        id: { type: integer }
+        type: { type: string, enum: [userRegistered, pharmacyVerified, orderPlaced, paymentReceived, alert] }
+        description: { type: string }
+        timestamp: { type: string }
+        metadata: { type: string }
 
     MedicineSearchResult:
       type: object

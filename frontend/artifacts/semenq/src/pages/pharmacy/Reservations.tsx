@@ -2,13 +2,14 @@ import { useState } from "react";
 import { motion } from "framer-motion";
 import { PharmacyLayout } from "@/layouts/PharmacyLayout";
 import { TopBar } from "@/components/TopBar";
-import { CheckCircle2, XCircle, Clock, Truck, MapPin, QrCode } from "lucide-react";
+import { CheckCircle2, XCircle, Clock, Truck, MapPin, QrCode, FileImage, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useQuery } from "@tanstack/react-query";
 import { useUpdateReservation } from "@workspace/api-client-react";
 import { auth } from "@/lib/firebase";
 import { toast } from "sonner";
 import { QRCode } from "@/components/QRCode";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 const statusColors: Record<string, string> = {
   pending: "bg-warning/10 text-warning border-warning/20",
@@ -32,6 +33,16 @@ export default function PharmacyReservations() {
       return response.json();
     },
   });
+  const { data: prescriptionData, refetch: refetchPrescriptions } = useQuery({
+    queryKey: ["pharmacy-prescription-requests"],
+    refetchInterval: 5000,
+    queryFn: async () => {
+      const token = await auth.currentUser?.getIdToken();
+      const response = await fetch("/api/prescriptions/pharmacy/requests", { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+      if (!response.ok) throw new Error("Unable to load prescription requests.");
+      return response.json();
+    },
+  });
   const reservations = (((data as any)?.data || []) as any[]).map(item => ({
     ...item,
     medicineName: item.medicineName || item.medicine_name || "Reservation",
@@ -42,6 +53,25 @@ export default function PharmacyReservations() {
     prescriptionId: item.prescriptionId || item.prescription_id,
   }));
   const updateReservation = useUpdateReservation();
+
+  const prescriptionRequests = (((prescriptionData as any)?.data || []) as any[]);
+
+  const reviewPrescription = async (id: string, status: "confirmed" | "rejected") => {
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      const response = await fetch(`/api/prescriptions/${id}/pharmacy-review`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({ status }),
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok || !payload?.success) throw new Error(payload?.message || "Could not review prescription.");
+      await refetchPrescriptions();
+      toast.success(status === "confirmed" ? "Prescription approved." : "Prescription rejected.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not review prescription.");
+    }
+  };
 
   const handleAction = async (id: number, status: "confirmed" | "cancelled" | "ready") => {
     try {
@@ -64,6 +94,23 @@ export default function PharmacyReservations() {
       <TopBar title="Reservations" subtitle={pendingCount > 0 ? `${pendingCount} pending approval` : undefined} userName="Pharmacy" />
 
       <div className="p-6 max-w-4xl space-y-4">
+        {prescriptionRequests.length > 0 && (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="font-semibold text-foreground">Prescription verification</h2>
+                <p className="text-xs text-muted-foreground">Review the patient’s prescription image before confirming.</p>
+              </div>
+              <span className="text-xs font-semibold text-warning bg-warning/10 px-2.5 py-1 rounded-full">
+                {prescriptionRequests.filter(request => request.pharmacy_status === "in_progress").length} in progress
+              </span>
+            </div>
+            {prescriptionRequests.map(request => (
+              <PrescriptionRequestCard key={request.id} request={request} onReview={reviewPrescription} />
+            ))}
+          </div>
+        )}
+
         <div className="flex gap-2 p-1 bg-muted rounded-xl w-fit">
           {tabs.map(tab => {
             const count = tab === "All" ? reservations.length : reservations.filter(r => r.status.toLowerCase() === tab.toLowerCase()).length;
@@ -152,5 +199,82 @@ export default function PharmacyReservations() {
         </div>
       </div>
     </PharmacyLayout>
+  );
+}
+
+function PrescriptionRequestCard({
+  request,
+  onReview,
+}: {
+  request: any;
+  onReview: (id: string, status: "confirmed" | "rejected") => Promise<void>;
+}) {
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [loadingImage, setLoadingImage] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
+
+  const showImage = async () => {
+    if (imageUrl) { setPreviewOpen(true); return; }
+    setLoadingImage(true);
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      const response = await fetch(request.image_url, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+      if (!response.ok) throw new Error("Prescription image unavailable.");
+      setImageUrl(URL.createObjectURL(await response.blob()));
+      setPreviewOpen(true);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not open prescription image.");
+    } finally {
+      setLoadingImage(false);
+    }
+  };
+
+  return (
+    <div className="bg-card border border-card-border rounded-[20px] p-4">
+      <div className="flex items-start gap-3">
+        <div className="w-10 h-10 rounded-xl bg-ai/10 flex items-center justify-center shrink-0">
+          <FileImage className="w-5 h-5 text-ai" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center justify-between gap-2">
+            <p className="font-semibold text-sm text-foreground">Prescription request</p>
+            <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${request.pharmacy_status === "confirmed" ? "text-success bg-success/10" : request.pharmacy_status === "rejected" ? "text-destructive bg-destructive/10" : "text-warning bg-warning/10"}`}>
+              {request.pharmacy_status === "confirmed" ? "Confirmed" : request.pharmacy_status === "rejected" ? "Rejected" : "In progress"}
+            </span>
+          </div>
+          <p className="text-xs text-muted-foreground mt-1">Patient: {request.patient_id}</p>
+          {request.extracted_medicines?.length > 0 && (
+            <p className="text-xs text-muted-foreground mt-1">Medicines: {request.extracted_medicines.map((medicine: any) => medicine.medicine_name).filter(Boolean).join(", ")}</p>
+          )}
+        </div>
+      </div>
+
+      <div className="mt-3 pt-3 border-t border-border">
+        <Button type="button" size="sm" variant="outline" className="h-8 text-xs rounded-[12px] gap-1" onClick={showImage} disabled={loadingImage}>
+          <Eye className="w-3.5 h-3.5" /> {loadingImage ? "Opening..." : imageUrl ? "Image opened" : "View prescription image"}
+        </Button>
+      </div>
+
+      <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
+        <DialogContent className="rounded-[20px] sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Patient prescription</DialogTitle>
+            <DialogDescription>Review the private prescription image before approving the request.</DialogDescription>
+          </DialogHeader>
+          {imageUrl && <img src={imageUrl} alt="Patient prescription" className="max-h-[70vh] w-full rounded-xl border border-border object-contain bg-muted" />}
+        </DialogContent>
+      </Dialog>
+
+      {request.pharmacy_status === "in_progress" && (
+        <div className="flex gap-2 mt-3">
+          <Button type="button" size="sm" className="flex-1 h-8 text-xs rounded-[12px] gap-1 bg-success hover:bg-success/90" onClick={() => onReview(request.id, "confirmed")}>
+            <CheckCircle2 className="w-3.5 h-3.5" /> Approve prescription
+          </Button>
+          <Button type="button" size="sm" variant="outline" className="flex-1 h-8 text-xs rounded-[12px] gap-1 border-destructive/30 text-destructive" onClick={() => onReview(request.id, "rejected")}>
+            <XCircle className="w-3.5 h-3.5" /> Reject
+          </Button>
+        </div>
+      )}
+    </div>
   );
 }

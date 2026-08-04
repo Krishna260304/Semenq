@@ -32,6 +32,9 @@ class Settings(BaseSettings):
 
     HOST: str = "0.0.0.0"
     PORT: int = 8000
+    # Public API origin for links returned by local storage. Leave empty when a
+    # reverse proxy serves frontend and backend under one origin.
+    PUBLIC_BASE_URL: str = ""
     WORKERS: int = 4
     RELOAD: bool = False
 
@@ -63,7 +66,7 @@ class Settings(BaseSettings):
     CLOUDINARY_FOLDER_PROFILES: str = "semenq/profiles"
 
     OCR_PROVIDER: Literal["paddleocr"] = "paddleocr"
-    ML_DEVICE: Literal["cuda", "cpu", "auto"] = "cuda"
+    ML_DEVICE: Literal["cuda", "cpu", "auto"] = "auto"
     OCR_FAST_PATH_ENABLED: bool = False
     OCR_FAST_CONFIDENCE_THRESHOLD: float = 0.55
     GOOGLE_VISION_CREDENTIALS_FILE: str = "/path/to/service-account.json"
@@ -112,7 +115,6 @@ class Settings(BaseSettings):
         "image/jpeg",
         "image/png",
         "image/jpg",
-        "application/pdf",
     ]
 
     RESERVATION_EXPIRY_HOURS: int = 2

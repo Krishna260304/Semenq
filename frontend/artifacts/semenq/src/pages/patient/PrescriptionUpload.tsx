@@ -2,9 +2,9 @@ import { useState, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { PatientLayout } from "@/layouts/PatientLayout";
 import { TopBar } from "@/components/TopBar";
-import { Upload, FileImage, X, Zap, CheckCircle2, AlertTriangle, Search, Edit3 } from "lucide-react";
+import { Upload, FileImage, X, Zap, CheckCircle2, AlertTriangle, Search, Edit3, Building2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { toast } from "sonner";
 import { useGetMyProfile } from "@workspace/api-client-react";
 import { auth } from "@/lib/firebase";
@@ -31,6 +31,7 @@ const scanSteps = [
 
 export default function PrescriptionUpload() {
   const { data: profile } = useGetMyProfile();
+  const [, navigate] = useLocation();
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [scanStatus, setScanStatus] = useState<ScanStatus>("idle");
@@ -42,7 +43,32 @@ export default function PrescriptionUpload() {
   const [overallConfidence, setOverallConfidence] = useState<number | null>(null);
   const [scanError, setScanError] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
+  const [currentPrescriptionId, setCurrentPrescriptionId] = useState<string | null>(null);
+  const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const [editDraft, setEditDraft] = useState<ParsedMedicine | null>(null);
+  const [confirming, setConfirming] = useState(false);
+  const [showContinue, setShowContinue] = useState(false);
+  // Pharmacy selection intentionally lives in My Prescriptions. These
+  // placeholders keep the legacy hidden block harmless during the transition.
+  const selectedPharmacyId = "";
+  const setSelectedPharmacyId = (_value: string) => undefined;
+  const pharmacies: any[] = [];
   const inputRef = useRef<HTMLInputElement>(null);
+
+  const resetUpload = () => {
+    setFile(null);
+    setPreview(null);
+    setScanStatus("idle");
+    setScanError(null);
+    setParsedMedicines([]);
+    setDoctorName(null);
+    setHospitalName(null);
+    setOverallConfidence(null);
+    setCurrentPrescriptionId(null);
+    setEditingIndex(null);
+    setEditDraft(null);
+    setShowContinue(false);
+  };
 
   const handleFile = (f: File) => {
     if (!f.type.startsWith("image/")) { toast.error("Please upload an image file (JPG or PNG)"); return; }
@@ -53,8 +79,67 @@ export default function PrescriptionUpload() {
     setDoctorName(null);
     setHospitalName(null);
     setOverallConfidence(null);
+    setCurrentPrescriptionId(null);
+    setEditingIndex(null);
+    setEditDraft(null);
+    setShowContinue(false);
     setScanStatus("uploading");
     void startScanning(f);
+  };
+
+  const startEdit = (index: number) => {
+    setEditingIndex(index);
+    setEditDraft({ ...parsedMedicines[index] });
+  };
+
+  const cancelEdit = () => {
+    setEditingIndex(null);
+    setEditDraft(null);
+  };
+
+  const saveEdit = () => {
+    if (editingIndex === null || !editDraft) return;
+    setParsedMedicines(previous => previous.map((item, index) => (index === editingIndex ? editDraft : item)));
+    setEditingIndex(null);
+    setEditDraft(null);
+  };
+
+  const confirmPrescription = async () => {
+    if (!currentPrescriptionId || parsedMedicines.length === 0 || confirming) return;
+    setConfirming(true);
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      if (!token) throw new Error("Please sign in before continuing.");
+
+      const response = await fetch(`/api/prescriptions/${currentPrescriptionId}/confirm`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          medicines: parsedMedicines.map((medicine) => ({
+            medicine_name: medicine.name,
+            dosage: medicine.dosage === "Not detected" ? null : medicine.dosage,
+            frequency: medicine.frequency === "Not detected" ? null : medicine.frequency,
+            duration: medicine.duration === "Not detected" ? null : medicine.duration,
+            confidence: Number.isFinite(medicine.confidence) ? Math.max(0, Math.min(1, medicine.confidence / 100)) : 0,
+          })),
+        }),
+      });
+      const result = await response.json().catch(() => null);
+      if (!response.ok || !result?.success) {
+        throw new Error(result?.message || "Could not confirm this prescription.");
+      }
+      setShowContinue(false);
+      toast.success("Prescription confirmed. Choose a pharmacy from My Prescriptions.");
+      navigate("/patient/prescriptions");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to confirm prescription.";
+      toast.error(message);
+    } finally {
+      setConfirming(false);
+    }
   };
 
   const startScanning = async (image: File) => {
@@ -75,6 +160,7 @@ export default function PrescriptionUpload() {
       }
 
       const prescriptionId = uploadResult.data.id;
+      setCurrentPrescriptionId(prescriptionId);
       setScanStatus("scanning");
 
       for (let attempt = 0; attempt < 90; attempt += 1) {
@@ -124,6 +210,7 @@ export default function PrescriptionUpload() {
           setProgress(100);
           setScanStep(scanSteps.length - 1);
           setScanStatus("done");
+          setShowContinue(result.patient_confirmed !== true);
           return;
         }
 
@@ -180,8 +267,14 @@ export default function PrescriptionUpload() {
               </motion.div>
             ) : (
               <div className="bg-card border border-card-border rounded-[24px] overflow-hidden">
-                <div className="relative aspect-[3/4] bg-muted max-h-96">
-                  {preview && <img src={preview} alt="Prescription" className="w-full h-full object-contain" />}
+                <div className="relative bg-muted flex justify-center overflow-hidden">
+                  {preview && (
+                    <img
+                      src={preview}
+                      alt="Prescription"
+                      className="block w-full h-auto max-w-full object-contain"
+                    />
+                  )}
 
                   {scanStatus === "scanning" && (
                     <div className="absolute inset-0">
@@ -209,7 +302,7 @@ export default function PrescriptionUpload() {
                     </div>
                   )}
 
-                  <button onClick={() => { setFile(null); setPreview(null); setScanStatus("idle"); }} className="absolute top-3 right-3 w-8 h-8 bg-white rounded-full shadow-md flex items-center justify-center hover:bg-muted transition-colors">
+                  <button onClick={resetUpload} className="absolute top-3 right-3 w-8 h-8 bg-white rounded-full shadow-md flex items-center justify-center hover:bg-muted transition-colors">
                     <X className="w-4 h-4 text-foreground" />
                   </button>
                 </div>
@@ -299,19 +392,56 @@ export default function PrescriptionUpload() {
                     <motion.div key={med.name} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.1 }} className="bg-card border border-card-border rounded-[20px] p-4">
                       <div className="flex items-start justify-between gap-3">
                         <div className="flex-1">
-                          <div className="flex items-center gap-2">
-                            <p className="font-semibold text-foreground text-sm">{med.name}</p>
-                            {med.status === "lowConfidence" && <AlertTriangle className="w-3.5 h-3.5 text-warning shrink-0" />}
-                          </div>
-                          <div className="flex flex-wrap gap-2 mt-1.5 text-xs text-muted-foreground">
-                            <span>Dosage: <span className="font-medium text-foreground">{med.dosage}</span></span>
-                            <span>·</span>
-                            <span>Frequency: <span className="font-medium text-foreground">{med.frequency}</span></span>
-                            <span>·</span>
-                            <span>Duration: <span className="font-medium text-foreground">{med.duration}</span></span>
-                          </div>
+                          {editingIndex === i && editDraft ? (
+                            <div className="space-y-2">
+                              <input
+                                value={editDraft.name}
+                                onChange={(event) => setEditDraft((previous) => previous ? { ...previous, name: event.target.value } : previous)}
+                                className="w-full border border-border rounded-lg px-2.5 py-1.5 text-sm"
+                                placeholder="Medicine name"
+                              />
+                              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                <input
+                                  value={editDraft.dosage}
+                                  onChange={(event) => setEditDraft((previous) => previous ? { ...previous, dosage: event.target.value } : previous)}
+                                  className="w-full border border-border rounded-lg px-2.5 py-1.5 text-xs"
+                                  placeholder="Dosage"
+                                />
+                                <input
+                                  value={editDraft.frequency}
+                                  onChange={(event) => setEditDraft((previous) => previous ? { ...previous, frequency: event.target.value } : previous)}
+                                  className="w-full border border-border rounded-lg px-2.5 py-1.5 text-xs"
+                                  placeholder="Frequency"
+                                />
+                                <input
+                                  value={editDraft.duration}
+                                  onChange={(event) => setEditDraft((previous) => previous ? { ...previous, duration: event.target.value } : previous)}
+                                  className="w-full border border-border rounded-lg px-2.5 py-1.5 text-xs"
+                                  placeholder="Duration"
+                                />
+                              </div>
+                              <div className="flex items-center gap-2 pt-1">
+                                <Button type="button" variant="outline" className="h-8 px-3 text-xs" onClick={cancelEdit}>Cancel</Button>
+                                <Button type="button" className="h-8 px-3 text-xs" onClick={saveEdit}>Save</Button>
+                              </div>
+                            </div>
+                          ) : (
+                            <>
+                              <div className="flex items-center gap-2">
+                                <p className="font-semibold text-foreground text-sm">{med.name}</p>
+                                {med.status === "lowConfidence" && <AlertTriangle className="w-3.5 h-3.5 text-warning shrink-0" />}
+                              </div>
+                              <div className="flex flex-wrap gap-2 mt-1.5 text-xs text-muted-foreground">
+                                <span>Dosage: <span className="font-medium text-foreground">{med.dosage}</span></span>
+                                <span>·</span>
+                                <span>Frequency: <span className="font-medium text-foreground">{med.frequency}</span></span>
+                                <span>·</span>
+                                <span>Duration: <span className="font-medium text-foreground">{med.duration}</span></span>
+                              </div>
+                            </>
+                          )}
                         </div>
-                        <button className="shrink-0 p-1.5 hover:bg-muted rounded-lg transition-colors">
+                        <button type="button" onClick={() => startEdit(i)} className="shrink-0 p-1.5 hover:bg-muted rounded-lg transition-colors" aria-label="Edit medicine">
                           <Edit3 className="w-3.5 h-3.5 text-muted-foreground" />
                         </button>
                       </div>
@@ -331,12 +461,49 @@ export default function PrescriptionUpload() {
                   ))}
 
                   {parsedMedicines.length > 0 && (
-                    <Link href="/patient/search">
-                      <Button className="w-full h-12 rounded-[18px] font-semibold mt-2 gap-2">
-                        <Search className="w-4 h-4" />
-                        Search All {parsedMedicines.length} Medicines
-                      </Button>
-                    </Link>
+                    <div className="bg-card border border-card-border rounded-[20px] p-3 mt-2">
+                      {showContinue && (
+                        <div className="space-y-3">
+                          {false && <div className="rounded-[16px] border border-primary/20 bg-primary/5 p-3">
+                            <div className="flex items-center gap-2 mb-2">
+                              <Building2 className="w-4 h-4 text-primary" />
+                              <p className="text-sm font-semibold text-foreground">Choose pharmacy for verification</p>
+                            </div>
+                            <select
+                              value={selectedPharmacyId}
+                              onChange={event => setSelectedPharmacyId(event.target.value)}
+                              className="w-full h-10 rounded-xl border border-border bg-background px-3 text-sm"
+                            >
+                              <option value="">Select an available pharmacy</option>
+                              {pharmacies.map(pharmacy => (
+                                <option key={pharmacy.id} value={pharmacy.id}>
+                                  {pharmacy.name} — {pharmacy.distance_text} — {pharmacy.available_medicines?.join(", ") || "Medicine available"}
+                                </option>
+                              ))}
+                            </select>
+                            <p className="text-xs text-muted-foreground mt-2">
+                              Only pharmacies with stock for this prescription are shown. The image will be sent privately for verification.
+                            </p>
+                            {pharmacies.length === 0 && <p className="text-xs text-warning mt-2">No pharmacy currently has a matched medicine in stock.</p>}
+                          </div>}
+                          <div className="grid grid-cols-2 gap-2">
+                            <Button type="button" variant="outline" onClick={resetUpload} className="h-11 rounded-[14px] font-semibold">
+                              Cancel
+                            </Button>
+                            <Button type="button" onClick={confirmPrescription} disabled={confirming} className="h-11 rounded-[14px] font-semibold">
+                              {confirming ? "Confirming..." : "Continue"}
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+
+                      <Link href="/patient/search">
+                        <Button className="w-full h-11 rounded-[14px] font-semibold mt-2 gap-2">
+                          <Search className="w-4 h-4" />
+                          Search All {parsedMedicines.length} Medicines
+                        </Button>
+                      </Link>
+                    </div>
                   )}
                 </motion.div>
               )}

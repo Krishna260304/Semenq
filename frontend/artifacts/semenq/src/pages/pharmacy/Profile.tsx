@@ -46,7 +46,12 @@ const sections = [
 async function getAuthToken(): Promise<string | null> {
   const user = auth.currentUser;
   if (!user) return null;
-  return user.getIdToken();
+  // force=true refreshes the token if it has expired or is about to expire
+  try {
+    return await user.getIdToken(/* forceRefresh */ true);
+  } catch {
+    return null;
+  }
 }
 
 async function apiFetch(path: string, init?: RequestInit) {
@@ -58,7 +63,7 @@ async function apiFetch(path: string, init?: RequestInit) {
   if (token) headers["Authorization"] = `Bearer ${token}`;
   const res = await fetch(path, { ...init, headers });
   const result = await res.json().catch(() => null);
-  if (!res.ok) throw new Error(result?.message || `API error ${res.status}`);
+  if (!res.ok) throw new Error(result?.message || result?.detail || `API error ${res.status}`);
   return result;
 }
 
@@ -125,11 +130,19 @@ export default function PharmacyProfile() {
 
   const queryClient = useQueryClient();
 
-  const { data: profileData, isLoading: profileLoading } = useQuery({
+  const {
+    data: profileData,
+    isLoading: profileLoading,
+    isError: profileError,
+    refetch: refetchProfile,
+  } = useQuery({
     queryKey: ["pharmacy-profile"],
     queryFn: () => apiFetch("/api/pharmacies/me"),
     enabled: !authLoading && !!user,
-    retry: 1,
+    retry: 2,
+    retryDelay: (attempt) => Math.min(300 * 2 ** attempt, 5_000),
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
   });
 
   const { data: sessionsData, isLoading: sessionsLoading } = useQuery({
@@ -384,6 +397,22 @@ export default function PharmacyProfile() {
                 {profileLoading ? (
                   <div className="flex items-center gap-2 text-muted-foreground py-8 justify-center">
                     <Loader2 className="w-5 h-5 animate-spin text-primary" /> Loading pharmacy details...
+                  </div>
+                ) : profileError ? (
+                  <div className="flex flex-col items-center gap-3 py-10 text-center">
+                    <div className="w-12 h-12 rounded-full bg-destructive/10 flex items-center justify-center">
+                      <X className="w-6 h-6 text-destructive" />
+                    </div>
+                    <p className="text-sm font-semibold text-foreground">Could not load pharmacy details</p>
+                    <p className="text-xs text-muted-foreground max-w-xs">
+                      This is usually caused by a session timeout. Please try refreshing or sign out and sign back in.
+                    </p>
+                    <button
+                      onClick={() => refetchProfile()}
+                      className="mt-1 text-xs text-primary font-semibold hover:underline"
+                    >
+                      Retry
+                    </button>
                   </div>
                 ) : (
                   <div className="grid grid-cols-2 gap-5">

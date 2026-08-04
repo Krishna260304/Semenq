@@ -29,10 +29,10 @@ def get_ocr_provider(provider_name: str | None = None):
     del provider_name
 
     provider = "paddleocr"
-    if not _is_provider_available(provider):
-        raise OCRException("PaddleOCR is not available. Install the `paddleocr` package to enable scanning.")
-
     try:
+        # PaddleOCRProvider owns a CPU RapidOCR fallback, so do not reject the
+        # provider here just because PaddleOCR is absent or cannot load CUDA.
+        # The provider will report a useful error only if both engines fail.
         return _build_provider(provider)
     except OCRException as exc:
         logger.error("Failed to initialize PaddleOCR provider", error=str(exc))

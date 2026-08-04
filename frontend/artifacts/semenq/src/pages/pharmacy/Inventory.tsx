@@ -32,6 +32,15 @@ const statusColors = { inStock: "text-success", lowStock: "text-warning", outOfS
 
 type BatchForm = {
   medicineName: string;
+  generic_name: string;
+  brand_name: string;
+  composition: string;
+  strength: string;
+  dosage_form: string;
+  manufacturer: string;
+  category_name: string;
+  prescription_required: boolean;
+  average_price: string;
   batch_number: string;
   expiry_date: string;
   quantity: string;
@@ -48,6 +57,15 @@ type RankedMedicineCandidate = {
 
 const emptyBatchForm: BatchForm = {
   medicineName: "",
+  generic_name: "",
+  brand_name: "",
+  composition: "",
+  strength: "",
+  dosage_form: "tablet",
+  manufacturer: "",
+  category_name: "General",
+  prescription_required: false,
+  average_price: "",
   batch_number: "",
   expiry_date: "",
   quantity: "",
@@ -201,7 +219,7 @@ export default function Inventory() {
 
     const exactMatch = ranked.find((item: RankedMedicineCandidate) => item.score >= 0.98);
     const bestMatch = exactMatch || ranked[0];
-    if (!bestMatch || bestMatch.score < 0.35) {
+    if (!bestMatch || bestMatch.score < 0.72) {
       return null;
     }
 
@@ -227,6 +245,7 @@ export default function Inventory() {
 
       const scan = result?.data || {};
       const bestMatch = scan.best_match || scan.suggestions?.[0];
+      const scannedForm = scan.form_data || {};
       const suggestedName =
         bestMatch?.name ||
         scan.queries?.[0] ||
@@ -237,7 +256,19 @@ export default function Inventory() {
         throw new Error("OCR could not detect a medicine name.");
       }
 
-      setBatchForm(previous => ({ ...previous, medicineName: suggestedName.trim() }));
+      setBatchForm(previous => ({
+        ...previous,
+        medicineName: (scannedForm.name || suggestedName).trim(),
+        generic_name: scannedForm.generic_name || previous.generic_name,
+        brand_name: scannedForm.brand_name || previous.brand_name,
+        composition: scannedForm.composition || previous.composition,
+        strength: scannedForm.strength || previous.strength,
+        dosage_form: scannedForm.dosage_form || previous.dosage_form,
+        manufacturer: scannedForm.manufacturer || previous.manufacturer,
+        category_name: scannedForm.category_name || previous.category_name,
+        prescription_required: scannedForm.prescription_required ?? previous.prescription_required,
+        average_price: scannedForm.average_price == null ? previous.average_price : String(scannedForm.average_price),
+      }));
       toast.success(bestMatch?.name ? `Matched ${bestMatch.name}` : "Medicine name extracted.");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not scan the image.");
@@ -270,12 +301,39 @@ export default function Inventory() {
 
     setBatchSaving(true);
     try {
-      const medicine = await resolveMedicine(batchForm.medicineName);
-      if (!medicine) {
-        throw new Error("No medicine in the database matched that name. Try a clearer name or scan a label.");
-      }
-
       const token = await getAuthToken();
+      let medicine = await resolveMedicine(batchForm.medicineName);
+      if (!medicine) {
+        if (!batchForm.generic_name || !batchForm.composition || !batchForm.manufacturer) {
+          throw new Error("This medicine is new. Complete generic name, composition, and manufacturer so it can be added safely.");
+        }
+        const createResponse = await fetch("/api/inventory/medicines", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify({
+            name: batchForm.medicineName,
+            generic_name: batchForm.generic_name,
+            brand_name: batchForm.brand_name || null,
+            composition: batchForm.composition,
+            strength: batchForm.strength,
+            dosage_form: batchForm.dosage_form,
+            manufacturer: batchForm.manufacturer,
+            category_name: batchForm.category_name || "General",
+            prescription_required: batchForm.prescription_required,
+            average_price: batchForm.average_price ? Number(batchForm.average_price) : null,
+          }),
+        });
+        const createResult = await createResponse.json().catch(() => null);
+        if (!createResponse.ok) {
+          throw new Error(createResult?.message || "Could not add this new medicine to the catalogue.");
+        }
+        medicine = createResult?.data;
+      }
+      if (!medicine?.id) throw new Error("Medicine could not be created or matched.");
+
       const response = await fetch(`/api/inventory/${medicine.id}/batches`, {
         method: "POST",
         headers: {
@@ -448,9 +506,37 @@ export default function Inventory() {
                   />
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  Scan a package label or type manually. We will match it against the medicine database when you save.
+                  OCR fills the catalogue details. If no match exists, review the details and we will add the medicine to the shared catalogue.
                 </p>
               </div>
+
+              {[
+                ["generic_name", "Generic name"],
+                ["brand_name", "Brand name"],
+                ["composition", "Composition / active ingredients"],
+                ["strength", "Strength"],
+                ["manufacturer", "Manufacturer"],
+                ["category_name", "Category"],
+                ["average_price", "Average price"],
+              ].map(([key, label]) => (
+                <div key={key} className="space-y-1.5">
+                  <Label>{label}</Label>
+                  <Input
+                    type={key === "average_price" ? "number" : "text"}
+                    value={(batchForm as any)[key]}
+                    onChange={event => setBatchForm(previous => ({ ...previous, [key]: event.target.value }))}
+                  />
+                </div>
+              ))}
+              <div className="space-y-1.5">
+                <Label>Dosage form</Label>
+                <select value={batchForm.dosage_form} onChange={event => setBatchForm(previous => ({ ...previous, dosage_form: event.target.value }))} className="w-full h-10 rounded-[12px] border border-input bg-background px-3 text-sm">
+                  {['tablet', 'capsule', 'syrup', 'injection', 'cream', 'ointment', 'drops', 'suspension', 'other'].map(value => <option key={value} value={value}>{value}</option>)}
+                </select>
+              </div>
+              <label className="flex items-center gap-2 text-sm mt-7">
+                <input type="checkbox" checked={batchForm.prescription_required} onChange={event => setBatchForm(previous => ({ ...previous, prescription_required: event.target.checked }))} /> Prescription required
+              </label>
 
               {[
                 ["batch_number", "Batch number"],

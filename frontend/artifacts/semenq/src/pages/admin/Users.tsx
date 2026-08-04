@@ -23,13 +23,14 @@ export default function AdminUsers() {
       const token = await auth.currentUser?.getIdToken();
       const response = await fetch("/api/users/admin-list", { headers: token ? { Authorization: `Bearer ${token}` } : {} });
       if (!response.ok) throw new Error("Unable to load users.");
-      return response.json();
+      const payload = await response.json();
+      return payload.data || [];
     },
   });
-  const users = ((data as any)?.data || []) as any[];
+  const users = (Array.isArray(data) ? data : []) as any[];
 
   const filtered = users.filter(u => {
-    const match = u.name.toLowerCase().includes(query.toLowerCase()) || u.email.toLowerCase().includes(query.toLowerCase());
+    const match = (u.name || "").toLowerCase().includes(query.toLowerCase()) || (u.email || "").toLowerCase().includes(query.toLowerCase());
     const roleMatch = filter === "all" || u.role === filter;
     return match && roleMatch;
   });

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+
 import redis.asyncio as aioredis
 
 from app.core.config import get_settings
@@ -8,6 +10,7 @@ from app.core.logging.logger import get_logger
 logger = get_logger(__name__)
 
 _redis_client: aioredis.Redis | None = None
+_CACHE_OPERATION_TIMEOUT = 2.0
 
 
 async def connect_redis(max_retries: int = 3, retry_delay: float = 1.0) -> None:
@@ -29,8 +32,11 @@ async def connect_redis(max_retries: int = 3, retry_delay: float = 1.0) -> None:
                 max_connections=settings.REDIS_MAX_CONNECTIONS,
                 encoding="utf-8",
                 decode_responses=True,
+                socket_connect_timeout=_CACHE_OPERATION_TIMEOUT,
+                socket_timeout=_CACHE_OPERATION_TIMEOUT,
+                retry_on_timeout=False,
             )
-            await client.ping()
+            await asyncio.wait_for(client.ping(), timeout=_CACHE_OPERATION_TIMEOUT)
             _redis_client = client
             logger.info("Redis connected successfully", attempt=attempt)
             return
@@ -40,7 +46,6 @@ async def connect_redis(max_retries: int = 3, retry_delay: float = 1.0) -> None:
                 error=str(exc),
             )
             if attempt < max_retries:
-                import asyncio
                 await asyncio.sleep(retry_delay)
 
     _redis_client = None
@@ -62,6 +67,18 @@ def get_redis() -> aioredis.Redis | None:
     return _redis_client
 
 
+async def _disable_unresponsive_cache() -> None:
+    """Fail open when Redis disappears; caching must never block API requests."""
+    global _redis_client
+    client = _redis_client
+    _redis_client = None
+    if client is not None:
+        try:
+            await client.aclose()
+        except Exception:
+            pass
+
+
 async def ping_redis() -> dict:
     if _redis_client is None:
         return {"status": "disconnected", "healthy": False}
@@ -79,8 +96,9 @@ async def cache_set(key: str, value: str, ttl: int | None = None) -> None:
     settings = get_settings()
     expire = ttl if ttl is not None else settings.REDIS_CACHE_TTL
     try:
-        await _redis_client.set(key, value, ex=expire)
+        await asyncio.wait_for(_redis_client.set(key, value, ex=expire), timeout=_CACHE_OPERATION_TIMEOUT)
     except Exception as exc:
+        await _disable_unresponsive_cache()
         logger.warning("cache_set failed", key=key, error=str(exc))
 
 
@@ -88,8 +106,9 @@ async def cache_get(key: str) -> str | None:
     if _redis_client is None:
         return None
     try:
-        return await _redis_client.get(key)
+        return await asyncio.wait_for(_redis_client.get(key), timeout=_CACHE_OPERATION_TIMEOUT)
     except Exception as exc:
+        await _disable_unresponsive_cache()
         logger.warning("cache_get failed", key=key, error=str(exc))
         return None
 

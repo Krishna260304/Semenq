@@ -3,7 +3,6 @@ Semenq — Local Storage Provider
 """
 from __future__ import annotations
 
-import os
 import uuid
 import asyncio
 from pathlib import Path
@@ -17,7 +16,10 @@ class LocalStorageProvider(BaseStorageProvider):
         self.upload_dir = Path("uploads")
         self.upload_dir.mkdir(parents=True, exist_ok=True)
         self.settings = get_settings()
-        self.base_url = f"http://localhost:{self.settings.PORT}/static"
+        # Set PUBLIC_BASE_URL (for example https://api.example.com) in a
+        # deployment. Relative URLs keep reverse-proxy and local deployments
+        # connected without baking localhost into records.
+        self.base_url = self.settings.PUBLIC_BASE_URL.rstrip("/") + "/static" if self.settings.PUBLIC_BASE_URL else "/static"
 
     async def upload(
         self,
@@ -68,3 +70,12 @@ class LocalStorageProvider(BaseStorageProvider):
 
     async def health_check(self) -> bool:
         return self.upload_dir.exists()
+
+    async def read(self, public_id: str) -> bytes:
+        """Read an object stored by this provider without an HTTP round trip."""
+        relative_path = Path(public_id + ".jpg")
+        path = (self.upload_dir / relative_path).resolve()
+        root = self.upload_dir.resolve()
+        if root not in path.parents or not path.is_file():
+            raise FileNotFoundError("Stored prescription image was not found.")
+        return await asyncio.to_thread(path.read_bytes)

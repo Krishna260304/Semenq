@@ -161,6 +161,18 @@ class Prescription(BaseDocument):
     has_search_results: bool = False
     search_session_id: Optional[str] = None
     reservation_id: Optional[str] = None
+    patient_confirmed: bool = False
+    patient_confirmed_at: Optional[datetime] = None
+
+    # Pharmacy verification is deliberately separate from OCR processing and
+    # patient confirmation.  A request starts in progress and only becomes
+    # confirmed after the selected pharmacy reviews the prescription image.
+    pharmacy_id: Optional[str] = None
+    pharmacy_name: Optional[str] = None
+    pharmacy_status: str = "not_requested"  # not_requested | in_progress | confirmed | rejected
+    pharmacy_requested_at: Optional[datetime] = None
+    pharmacy_reviewed_at: Optional[datetime] = None
+    pharmacy_rejection_reason: Optional[str] = None
 
     processing_started_at: Optional[datetime] = None
     processing_completed_at: Optional[datetime] = None

@@ -3,10 +3,10 @@ from __future__ import annotations
 import re
 import unicodedata
 from collections import Counter
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from difflib import SequenceMatcher
-from typing import Any, Iterable, Sequence
-
+from typing import Any
 
 _FORM_WORDS = {
     "ampoule",
@@ -82,6 +82,31 @@ _UNIT_WORDS = {
     "units",
 }
 
+# A printed brand plus strength is much stronger evidence than a matching
+# generic composition.  Without treating it specially, "Dolo-650" and
+# "Extramol 650" can both look like an excellent match because they contain
+# Paracetamol 650 mg.  That is not safe for a patient or a pharmacy: a generic
+# match must never silently replace a clearly read product label.
+_PRODUCT_SIGNATURE_RE = re.compile(
+    r"\b([a-z][a-z0-9+/-]{2,39})\s*(?:-|\s)\s*(\d{1,5}(?:\.\d+)?)\s*(?:mg|mcg|g|ml|l|iu|%)?\b",
+    re.IGNORECASE,
+)
+_NON_BRAND_SIGNATURE_STEMS = {
+    "acetaminophen",
+    "amoxicillin",
+    "amoxycillin",
+    "azithromycin",
+    "caffeine",
+    "cetirizine",
+    "diclofenac",
+    "ibuprofen",
+    "metformin",
+    "nimesulide",
+    "omeprazole",
+    "paracetamol",
+    "pantoprazole",
+}
+
 
 @dataclass(frozen=True)
 class RankedMedicine:
@@ -135,6 +160,48 @@ def _tokenize(text: str) -> list[str]:
 
 def normalize_medicine_text(text: str) -> str:
     return " ".join(_tokenize(text))
+
+
+def _product_signatures(text: str) -> list[tuple[str, str]]:
+    """Return explicit brand/strength pairs, e.g. ``("dolo", "650")``.
+
+    Generic ingredient names are intentionally excluded.  They are useful for
+    finding alternatives, but cannot prove the identity of a branded package.
+    """
+    signatures: list[tuple[str, str]] = []
+    for match in _PRODUCT_SIGNATURE_RE.finditer(_strip_accents(text or "")):
+        stem, strength = match.group(1).lower(), match.group(2)
+        if stem not in _NON_BRAND_SIGNATURE_STEMS:
+            signatures.append((stem, strength))
+    return list(dict.fromkeys(signatures))
+
+
+def _product_signature_score(signatures: Sequence[tuple[str, str]], medicine: Any) -> float:
+    """Score a medicine against an explicit OCR brand/strength signature."""
+    if not signatures:
+        return 0.0
+
+    candidate_signatures: list[tuple[str, str]] = []
+    for field_name, value in _field_texts(medicine):
+        if field_name not in {"name", "brand_name", "name_strength"}:
+            continue
+        candidate_signatures.extend(_product_signatures(value))
+
+    best = 0.0
+    for query_stem, query_strength in signatures:
+        for candidate_stem, candidate_strength in candidate_signatures:
+            stem_similarity = SequenceMatcher(None, query_stem, candidate_stem).ratio()
+            if query_strength == candidate_strength:
+                # Exact strength alone is insufficient: unrelated brands such
+                # as Dolo and Extramol both have a 650 mg variant.  Permit a
+                # high spelling similarity for OCR typos, but never let a
+                # generic/strength coincidence become a product match.
+                score = 0.7 + (0.3 * stem_similarity) if stem_similarity >= 0.78 else 0.0
+            else:
+                # A different strength is never a safe auto-match.
+                score = 0.12 * stem_similarity
+            best = max(best, score)
+    return round(best, 4)
 
 
 def build_medicine_queries(*texts: str | None, max_queries: int = 10) -> list[str]:
@@ -291,7 +358,7 @@ def score_medicine_against_query(query: str, medicine: Any) -> tuple[float, str,
 
     best_score = min(best_score, 1.0)
 
-    if best_score >= 0.98:
+    if best_score >= 0.98 and best_field not in {"generic_name", "composition", "generic_composition"}:
         match_type = "exact"
     elif best_field == "brand_name" and best_score >= 0.7:
         match_type = "brand"
@@ -313,6 +380,13 @@ def rank_medicines_for_queries(
     limit: int = 5,
 ) -> list[RankedMedicine]:
     ranked: list[RankedMedicine] = []
+    explicit_product_signatures = list(
+        dict.fromkeys(
+            signature
+            for query in queries
+            for signature in _product_signatures(query)
+        )
+    )
 
     for medicine in medicines:
         per_query_scores: list[tuple[float, str, str, str]] = []
@@ -333,6 +407,22 @@ def rank_medicines_for_queries(
         if len(per_query_scores) > 2:
             aggregate += per_query_scores[2][0] * 0.1
         aggregate = min(aggregate, 1.0)
+
+        product_score = _product_signature_score(explicit_product_signatures, medicine)
+        if explicit_product_signatures:
+            if product_score >= 0.75:
+                # The explicit package name wins over a coincidental generic
+                # composition match.  Keep a small amount of the normal score
+                # to still handle imperfect OCR spelling.
+                aggregate = max(aggregate, min(1.0, product_score * 0.9 + top_score * 0.1))
+                if product_score >= 0.98:
+                    top_type = "exact"
+                elif top_type == "none":
+                    top_type = "typo"
+            else:
+                # Do not return another brand at high confidence merely
+                # because its composition/strength happens to be the same.
+                aggregate = min(aggregate, 0.49)
 
         ranked.append(
             RankedMedicine(

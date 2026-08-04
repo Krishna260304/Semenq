@@ -5,6 +5,7 @@ import asyncio
 import json
 import hashlib
 import re
+from difflib import SequenceMatcher
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -31,6 +32,13 @@ from app.services.medicine_matching import build_medicine_queries, rank_medicine
 
 logger = get_logger(__name__)
 settings = get_settings()
+
+BLOCKED_BRAND_STEMS = {
+    "sikkim", "south", "north", "east", "west", "india", "road", "trade",
+    "mark", "regd", "mfg", "lic", "mode", "namthang", "namchi", "mamring",
+    "microlabs", "tablet", "tablets", "paracetamol", "plot", "phase",
+    "industrial", "estate", "district", "pincode",
+}
 
 
 def _utcnow() -> datetime:
@@ -59,8 +67,52 @@ class PrescriptionService:
         if not lines:
             return None
 
+        reject_line_re = re.compile(
+            r"(?i)\b(warning|store|dosage|dose|physician|doctor|tablet contains|each uncoated|mfg|lic|made in|regd|trade mark|batch|expiry|manufactured|temperature|liver|keep out|schedule|address|road|namchi|mamring|namthang|sikkim|plot|phase|industrial|estate|pincode|district|phone|email)\b"
+        )
+        medicine_hint_re = re.compile(
+            r"(?i)\b([a-z][a-z0-9]+(?:[- ][a-z0-9]+){0,2}(?:\s+\d{2,4}\s*(?:mg|mcg|g|ml))?)\b"
+        )
+        branded_name_re = re.compile(r"(?i)\b([a-z][a-z0-9]{2,}(?:[- ][a-z0-9]{1,})+)\b")
+        # Brand names can be long (e.g. hydrochlorothiazide combinations),
+        # and OCR may separate the strength with a space instead of a hyphen.
+        strict_brand_dose_re = re.compile(r"(?i)\b([a-z][a-z0-9+/-]{2,39}[-\s]+\d{1,5}(?:\.\d+)?(?:\s*(?:mg|mcg|g|ml|l|iu|%))?)\b")
+        blocked_brand_stems = {
+            "sikkim",
+            "south",
+            "north",
+            "east",
+            "west",
+            "india",
+            "road",
+            "trade",
+            "mark",
+            "regd",
+            "mfg",
+            "lic",
+            "mode",
+            "namthang",
+            "namchi",
+            "mamring",
+            "microlabs",
+            "tablet",
+            "tablets",
+            "paracetamol",
+            "plot",
+            "phase",
+            "industrial",
+            "estate",
+            "district",
+            "pincode",
+        }
+
+        prioritized_lines = sorted(
+            lines,
+            key=lambda value: 0 if branded_name_re.search(value) else 1,
+        )
+
         dosage_re = re.compile(
-            r"(?i)\b(\d+(?:\.\d+)?\s*(?:mg|mcg|g|ml|iu|unit|units|tab|tabs|tablet|tablets|cap|caps|capsule|capsules|drop|drops|syrup|spray|patch))\b"
+            r"(?i)\b(\d+(?:\.\d+)?\s*(?:mg|mcg|g|ml|l|iu|%|mg/ml|mcg/ml|unit|units|tab|tabs|tablet|tablets|cap|caps|capsule|capsules|drop|drops|syrup|spray|patch))\b"
         )
         frequency_re = re.compile(
             r"(?i)\b(once daily|twice daily|thrice daily|four times daily|od|bd|bid|tid|qid|hs|morning|night|before food|after food)\b"
@@ -71,10 +123,12 @@ class PrescriptionService:
         medicines: list[AIExtractedMedicineItem] = []
         total_confidence = 0.0
 
-        for line in lines:
-            if len(medicines) >= 6:
+        for line in prioritized_lines:
+            if len(medicines) >= 20:
                 break
             if not any(char.isalpha() for char in line):
+                continue
+            if reject_line_re.search(line):
                 continue
 
             dosage_match = dosage_re.search(line)
@@ -86,20 +140,47 @@ class PrescriptionService:
             candidate = frequency_re.sub(" ", candidate)
             candidate = duration_re.sub(" ", candidate)
             candidate = noise_re.sub(" ", candidate)
+            candidate = re.sub(r"(?i)^\s*(take|use|apply|inject|give|administer)\s+", "", candidate)
             candidate = re.split(r"[-:,/]", candidate, maxsplit=1)[0]
             candidate = re.sub(r"\s+", " ", candidate).strip(" .")
 
             tokens = [token for token in candidate.split() if len(token) > 1 and token.lower() not in {"ip", "usp", "bp"}]
             if not tokens:
                 continue
+            if all(token.lower() in {"for", "the", "and", "with", "once", "twice", "thrice", "daily", "day", "days", "week", "weeks"} for token in tokens):
+                continue
 
-            medicine_name = " ".join(tokens[:4]).strip()
+            strict_match = strict_brand_dose_re.search(line)
+            # If OCR sees a generic prefix (Vitamin B12, Losartan potassium),
+            # keep the complete prefix instead of starting at the last token
+            # before the strength.
+            explicit_brand = strict_match if strict_match and strict_match.start() == 0 else None
+            branded = explicit_brand or branded_name_re.search(candidate)
+            hinted = medicine_hint_re.search(candidate)
+            if branded:
+                medicine_name = re.sub(r"\s+", " ", branded.group(1)).strip(" .")
+            elif hinted:
+                medicine_name = re.sub(r"\s+", " ", hinted.group(1)).strip(" .")
+            else:
+                medicine_name = " ".join(tokens[:8]).strip()
             if len(medicine_name) < 3:
                 continue
+
+            if reject_line_re.search(medicine_name):
+                continue
+            if explicit_brand and not strict_brand_dose_re.search(medicine_name):
+                continue
+            strict_token = strict_brand_dose_re.search(medicine_name)
+            if strict_token:
+                stem = strict_token.group(1).split("-", 1)[0].lower()
+                if stem in blocked_brand_stems:
+                    continue
 
             confidence = 0.5
             if dosage_match:
                 confidence += 0.18
+            if explicit_brand:
+                confidence += 0.14
             if frequency_match:
                 confidence += 0.12
             if duration_match:
@@ -122,6 +203,29 @@ class PrescriptionService:
                     confidence=confidence,
                 )
             )
+
+        # De-duplicate repeated OCR lines without discarding other medicines.
+        # The previous implementation kept only one brand-strength candidate,
+        # which is why a Dolo label appeared to work while multi-medicine Rx
+        # images lost every other item.
+        explicit_brand_present = any(strict_brand_dose_re.search(item.medicine_name) for item in medicines)
+        unique: dict[str, AIExtractedMedicineItem] = {}
+        for item in medicines:
+            key = re.sub(r"[^a-z0-9]+", " ", item.medicine_name.lower()).strip()
+            if not key:
+                continue
+            # Ingredient-only lines such as “Paracetamol Tablets IP” are label
+            # composition text, not a second product, when a branded product
+            # with a strength is present on the same package.
+            if explicit_brand_present and not strict_brand_dose_re.search(item.medicine_name):
+                raw_lower = item.raw_text.lower()
+                if item.dosage is None and re.search(r"\b(tablet|capsule|syrup|injection)s?\b", raw_lower):
+                    continue
+            previous = unique.get(key)
+            if previous is None or item.confidence > previous.confidence:
+                unique[key] = item
+        medicines = list(unique.values())
+        total_confidence = sum(item.confidence for item in medicines)
 
         if not medicines:
             return None
@@ -181,8 +285,9 @@ class PrescriptionService:
         await image_record.insert()
 
         prescription.image_id = image_record.id
-        prescription.original_image_url = upload_result.secure_url
-        prescription.thumbnail_url = upload_result.thumbnail_url
+        image_url = f"/api/prescriptions/{prescription.id}/image"
+        prescription.original_image_url = image_url
+        prescription.thumbnail_url = image_url
         await prescription.save()
 
 
@@ -201,12 +306,11 @@ class PrescriptionService:
         prescription.processing_status = PrescriptionStatus.OCR_PROCESSING
         await prescription.save()
 
-        import httpx
         try:
-            async with httpx.AsyncClient() as client:
-                resp = await client.get(image_record.original_url)
-                resp.raise_for_status()
-                image_bytes = resp.content
+            # Local uploads are already on this server. Reading them directly
+            # avoids an unreliable localhost HTTP dependency and removes an
+            # SSRF-shaped fetch path from OCR processing.
+            image_bytes = await self._storage.read(image_record.cloudinary_id)
         except Exception as exc:
             prescription.processing_status = PrescriptionStatus.FAILED
             prescription.last_error = f"Failed to fetch image: {exc}"
@@ -246,7 +350,17 @@ class PrescriptionService:
         ai_result = self._extract_medicines_fast(ocr_log.raw_text)
         using_fast_path = ai_result is not None and ai_result.overall_confidence >= 0.65
         if not using_fast_path and not hasattr(self, "_ai"):
-            raise PrescriptionProcessingException("AI provider is not configured.")
+            # OCR must still complete on installations without a local LLM.
+            # Return a reviewable partial result instead of marking the whole
+            # prescription as failed just because the heuristic was uncertain.
+            ai_result = ai_result or AIExtractionResult(
+                medicines=[],
+                overall_confidence=0.0,
+                provider="heuristic",
+                model="heuristic-rule-extractor",
+                raw_response=json.dumps({"medicines": [], "overall_confidence": 0.0}),
+            )
+            using_fast_path = True
 
         ai_log = AILog(
             prescription_id=prescription.id,
@@ -359,9 +473,32 @@ class PrescriptionService:
             )
             candidate_pool = []
             seen_ids: set[str] = set()
+
+            # 1. Direct Regex Brand Search (e.g. 'Dolo' from 'Dolo-650')
+            brand_stems = set()
+            for text_val in (item.medicine_name, item.raw_text):
+                if text_val:
+                    for m in re.finditer(r"(?i)\b([a-z]{3,15})\b", text_val):
+                        stem = m.group(1).lower()
+                        if stem not in BLOCKED_BRAND_STEMS and stem not in {"tablet", "tablets", "capsule", "capsules", "syrup", "injection"}:
+                            brand_stems.add(stem)
+
+            for b_stem in brand_stems:
+                regex_results = await Medicine.find(
+                    {"name": {"$regex": rf"^{re.escape(b_stem)}\b", "$options": "i"}, "is_deleted": False}
+                ).limit(10).to_list()
+                for medicine in regex_results:
+                    if medicine.id not in seen_ids:
+                        seen_ids.add(medicine.id)
+                        candidate_pool.append(medicine)
+
+            # 2. Text Search with Hyphens Sanitized (MongoDB treats leading '-' as exclusion/negation)
             for query in queries:
+                clean_query = re.sub(r"-+", " ", query).strip()
+                if not clean_query:
+                    continue
                 search_results = await Medicine.find(
-                    {"$text": {"$search": query}, "is_deleted": False}
+                    {"$text": {"$search": clean_query}, "is_deleted": False}
                 ).limit(10).to_list()
                 for medicine in search_results:
                     if medicine.id in seen_ids:
@@ -377,6 +514,32 @@ class PrescriptionService:
 
             if ranked:
                 top_match = ranked[0]
+
+                original_brand_token = re.search(r"(?i)\b([a-z]{3,12})[-\s](\d{2,4})\b", item.medicine_name or "")
+                if original_brand_token:
+                    original_stem = original_brand_token.group(1).lower()
+                    original_dose = original_brand_token.group(2)
+                    best_brand_variant = top_match
+                    best_brand_variant_score = 0.0
+
+                    for candidate in ranked:
+                        candidate_label = str(getattr(candidate.medicine, "brand_name", None) or getattr(candidate.medicine, "name", "") or "")
+                        candidate_token = re.search(r"(?i)\b([a-z]{3,12})[-\s](\d{2,4})\b", candidate_label)
+                        if not candidate_token:
+                            continue
+                        candidate_stem = candidate_token.group(1).lower()
+                        candidate_dose = candidate_token.group(2)
+                        if candidate_dose != original_dose:
+                            continue
+                        stem_similarity = SequenceMatcher(None, original_stem, candidate_stem).ratio()
+                        candidate_score = stem_similarity * 0.7 + candidate.score * 0.3
+                        if candidate_score > best_brand_variant_score:
+                            best_brand_variant = candidate
+                            best_brand_variant_score = candidate_score
+
+                    if best_brand_variant_score >= 0.65:
+                        top_match = best_brand_variant
+
                 match_record.matched_medicine_id = top_match.medicine.id
                 match_record.matched_medicine_name = top_match.medicine.name
                 match_record.match_type = top_match.match_type if top_match.match_type != "none" else "typo"
@@ -390,13 +553,33 @@ class PrescriptionService:
                     for item in ranked[1:]
                 ]
 
-                if top_match.score >= 0.85:
-                    item.medicine_name = top_match.medicine.name
-                    if getattr(top_match.medicine, "brand_name", None):
-                        item.brand_name = top_match.medicine.brand_name
-                    if getattr(top_match.medicine, "composition", None):
-                        item.composition = top_match.medicine.composition
-                    item.requires_manual_verification = top_match.score < 0.92
+                original_name = (item.medicine_name or "").strip()
+                original_raw = (item.raw_text or "").strip()
+                original_brand_like = re.search(r"(?i)\b([a-z][a-z0-9]{2,}(?:[- ][a-z0-9]{1,})+)\b", f"{original_name} {original_raw}")
+
+                if top_match.match_type in {"exact", "brand"} and top_match.score >= 0.9:
+                    preferred_name = top_match.medicine.name
+                    if top_match.match_type == "brand" and getattr(top_match.medicine, "brand_name", None):
+                        preferred_name = str(top_match.medicine.brand_name)
+
+                    clean_orig = re.sub(r"[^a-z0-9]", "", original_brand_like.group(1).lower()) if original_brand_like else ""
+                    clean_pref = re.sub(r"[^a-z0-9]", "", preferred_name.lower())
+
+                    if clean_orig and clean_orig not in clean_pref:
+                        # Keep explicit OCR brand tokens (example: Dolo-650)
+                        # if DB normalization suggests a completely different product label.
+                        item.requires_manual_verification = True
+                    else:
+                        item.medicine_name = preferred_name
+                        if getattr(top_match.medicine, "brand_name", None):
+                            item.brand_name = top_match.medicine.brand_name
+                        if getattr(top_match.medicine, "composition", None):
+                            item.composition = top_match.medicine.composition
+                        item.requires_manual_verification = top_match.score < 0.95
+                else:
+                    # Preserve OCR/AI medicine naming when the DB link is only
+                    # a generic/typo-level guess to avoid confident mislabeling.
+                    item.requires_manual_verification = True
 
             await match_record.insert()
             matches.append(match_record)

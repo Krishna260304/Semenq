@@ -25,22 +25,31 @@ logger = get_logger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     logger.info("Application starting up...")
-    
+
+    # Initialize Firebase Admin SDK before accepting requests so that
+    # the very first authenticated API call can verify Firebase tokens.
+    try:
+        from app.security.firebase_auth import init_firebase
+        init_firebase()
+        logger.info("Firebase Admin SDK initialized.")
+    except Exception as exc:
+        logger.warning(f"Firebase Admin SDK initialization failed (auth will be limited): {exc}")
+
     await connect_database()
     await connect_redis()
-    
+
     import asyncio
     from app.services.backup_service import restore_medicines_from_backup
     asyncio.create_task(restore_medicines_from_backup())
-    
+
     logger.info("Application startup complete.")
     yield
-    
+
     logger.info("Application shutting down...")
-    
+
     await disconnect_redis()
     await disconnect_database()
-    
+
     logger.info("Application shutdown complete.")
 
 
@@ -57,21 +66,30 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
-    from fastapi.staticfiles import StaticFiles
-    import os
-    os.makedirs("uploads", exist_ok=True)
-    app.mount("/static", StaticFiles(directory="uploads"), name="static")
-
     app.add_middleware(RequestIDMiddleware)
     app.add_middleware(LoggingMiddleware)
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.ALLOWED_HOSTS)
+    # Allow all headers in development; lock down to explicit list in production
+    cors_allowed_headers = (
+        ["*"]
+        if settings.is_development
+        else [
+            "Authorization",
+            "Content-Type",
+            "Accept",
+            "X-Request-ID",
+            "X-Requested-With",
+            "Cache-Control",
+            "Pragma",
+        ]
+    )
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.CORS_ORIGINS,
         allow_credentials=settings.CORS_ALLOW_CREDENTIALS,
         allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-        allow_headers=["Authorization", "Content-Type", "Accept", "X-Request-ID"],
-        expose_headers=["X-Request-ID"],
+        allow_headers=cors_allowed_headers,
+        expose_headers=["X-Request-ID", "X-Process-Time"],
     )
 
     @app.middleware("http")

@@ -207,18 +207,30 @@ class MedicineService:
             await inventory.insert()
 
         quantity = batch_data.get("quantity", 0)
+        # The API uses pharmacy-friendly names while the persisted batch
+        # document keeps its historical field names.  Normalize them here so
+        # a newly created catalogue medicine can immediately receive stock.
         batch = InventoryBatch(
             pharmacy_id=pharmacy_id,
             medicine_id=medicine_id,
             inventory_id=inventory.id,
             created_by=performed_by,
-            **batch_data,
+            batch_number=batch_data.get("batch_number", ""),
+            expiry_date=batch_data["expiry_date"],
+            quantity=quantity,
+            remaining_quantity=quantity,
+            mrp=batch_data.get("mrp", 0),
+            selling_price=batch_data.get("unit_price", batch_data.get("selling_price", 0)),
+            purchase_price=batch_data.get("purchase_price", 0),
+            supplier=batch_data.get("supplier_name") or batch_data.get("supplier", ""),
         )
         await batch.insert()
 
         qty_before = inventory.available_quantity
         inventory.available_quantity += quantity
         inventory.current_batch_id = batch.id
+        inventory.unit_price = batch_data.get("unit_price", batch_data.get("selling_price", inventory.unit_price))
+        inventory.mrp = batch_data.get("mrp", inventory.mrp)
         inventory.last_restocked_at = _utcnow()
         inventory.status = self._compute_inventory_status(inventory)
         await inventory.save()

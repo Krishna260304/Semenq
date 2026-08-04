@@ -30,6 +30,7 @@ class MedicineSearchRequest(BaseModel):
 class MedicineCreateRequest(BaseModel):
     name: str = Field(min_length=2, max_length=200)
     generic_name: str = Field(min_length=2, max_length=200)
+    brand_name: Optional[str] = None
     composition: str = Field(min_length=2, max_length=500)
     manufacturer: str = Field(min_length=2, max_length=200)
     category_name: str = Field(default="General", max_length=100)
@@ -37,6 +38,19 @@ class MedicineCreateRequest(BaseModel):
     dosage_form: DosageForm = DosageForm.TABLET
     prescription_required: bool = False
     average_price: Optional[float] = Field(default=None, ge=0)
+    # Optional catalogue metadata captured from a package label.  Keeping
+    # these fields on the same request lets pharmacy OCR create a complete
+    # medicine record when it is not already in the catalogue.
+    description: str = ""
+    usage_instructions: str = ""
+    storage_instructions: str = ""
+    side_effects: str = ""
+    contraindications: str = ""
+    warnings: str = ""
+    drug_interactions: str = ""
+    scheduled_drug: bool = False
+    country: str = "India"
+    barcode: Optional[str] = None
 
 
 class MedicineUpdateRequest(BaseModel):

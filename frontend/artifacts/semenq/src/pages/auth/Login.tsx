@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "wouter";
-import { Activity, Eye, EyeOff, ArrowRight, Loader2, Shield, Zap, MapPin } from "lucide-react";
+import { Activity, Eye, EyeOff, ArrowRight, Loader2, Zap, MapPin } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -421,7 +421,6 @@ export default function Login() {
             {[
               { icon: Zap, text: "AI prescription parsing in seconds" },
               { icon: MapPin, text: "National medicine search network" },
-              { icon: Shield, text: "CDSCO verified pharmacies only" },
             ].map(item => {
               const Icon = item.icon;
               return (
@@ -436,13 +435,6 @@ export default function Login() {
           </div>
         </div>
 
-        <div className="relative">
-          <div className="bg-white/10 backdrop-blur rounded-2xl p-4 border border-white/20">
-            <p className="text-white/70 text-xs mb-2 font-medium">WHAT OUR USERS SAY</p>
-            <p className="text-white text-sm">"I used to spend hours finding medicines. Semenq makes the search quick and simple."</p>
-            <p className="text-white/60 text-xs mt-2">— Pharmacy team member</p>
-          </div>
-        </div>
       </div>
 
       <div className="flex-1 flex items-center justify-center p-8">

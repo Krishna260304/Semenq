@@ -48,3 +48,22 @@ class PrescriptionResponse(BaseModel):
     medicine_match_ids: list[str] = []
     overall_confidence: float
     last_error: Optional[str] = None
+    patient_confirmed: bool = False
+    pharmacy_id: Optional[str] = None
+    pharmacy_name: Optional[str] = None
+    pharmacy_status: str = "not_requested"
+    pharmacy_requested_at: Optional[datetime] = None
+    pharmacy_reviewed_at: Optional[datetime] = None
+    pharmacy_rejection_reason: Optional[str] = None
+
+
+class ConfirmPrescriptionMedicineItem(BaseModel):
+    medicine_name: str
+    dosage: Optional[str] = None
+    frequency: Optional[str] = None
+    duration: Optional[str] = None
+    confidence: Optional[float] = None
+
+
+class ConfirmPrescriptionRequest(BaseModel):
+    medicines: list[ConfirmPrescriptionMedicineItem] = []

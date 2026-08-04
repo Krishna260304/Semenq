@@ -21,64 +21,6 @@ const sortOptions = [
   { value: "fastest", label: "Fastest Delivery" },
 ];
 
-function _UnusedMapPlaceholder({ markers }: { markers: any[] }) {
-  const statusColors: Record<string, string> = { available: "#10B981", limited: "#F59E0B", outOfStock: "#EF4444", courier: "#7C3AED" };
-  return (
-    <div className="relative w-full h-full bg-[#e8f0fe] rounded-2xl overflow-hidden">
-      <svg className="absolute inset-0 w-full h-full opacity-20" xmlns="http://www.w3.org/2000/svg">
-        <defs>
-          <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
-            <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#2563EB" strokeWidth="0.5"/>
-          </pattern>
-        </defs>
-        <rect width="100%" height="100%" fill="url(#grid)" />
-      </svg>
-      <svg className="absolute inset-0 w-full h-full opacity-30" xmlns="http://www.w3.org/2000/svg">
-        <line x1="0" y1="50%" x2="100%" y2="48%" stroke="#94a3b8" strokeWidth="3" />
-        <line x1="30%" y1="0" x2="35%" y2="100%" stroke="#94a3b8" strokeWidth="2" />
-        <line x1="65%" y1="0" x2="60%" y2="100%" stroke="#94a3b8" strokeWidth="2" />
-        <line x1="0" y1="30%" x2="100%" y2="32%" stroke="#cbd5e1" strokeWidth="1.5" />
-        <line x1="0" y1="70%" x2="100%" y2="68%" stroke="#cbd5e1" strokeWidth="1.5" />
-      </svg>
-
-      <div className="absolute" style={{ left: "48%", top: "52%", transform: "translate(-50%,-50%)" }}>
-        <div className="w-5 h-5 rounded-full bg-primary border-4 border-white shadow-lg" />
-        <div className="absolute -bottom-6 left-1/2 -translate-x-1/2 whitespace-nowrap text-xs font-bold text-primary bg-white/90 px-2 py-0.5 rounded-full shadow">You</div>
-      </div>
-
-      {[
-        { left: "62%", top: "38%", marker: markers[0] },
-        { left: "32%", top: "28%", marker: markers[1] },
-        { left: "54%", top: "66%", marker: markers[2] },
-      ].map(({ left, top, marker }) => (
-        <div key={marker.pharmacyId} className="absolute group cursor-pointer" style={{ left, top, transform: "translate(-50%,-100%)" }}>
-          <div className="w-8 h-8 rounded-full border-3 border-white shadow-lg flex items-center justify-center transition-transform group-hover:scale-110"
-            style={{ backgroundColor: statusColors[marker.stockStatus] || "#10B981", borderWidth: "2px" }}>
-            <Navigation className="w-3.5 h-3.5 text-white" />
-          </div>
-          <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block z-10">
-            <div className="bg-white rounded-xl shadow-xl p-3 min-w-[160px] border border-border">
-              <p className="text-xs font-semibold text-foreground">{marker.pharmacyName}</p>
-              {marker.quantity > 0 && <p className="text-xs text-muted-foreground mt-0.5">{marker.quantity} units · ₹{marker.price}</p>}
-              <StockBadge status={marker.stockStatus as any} quantity={marker.quantity || undefined} className="mt-1.5" />
-            </div>
-          </div>
-        </div>
-      ))}
-
-      <div className="absolute bottom-3 left-3 bg-white/90 backdrop-blur rounded-xl p-2.5 border border-border">
-        <p className="text-xs font-medium text-muted-foreground mb-1.5">Legend</p>
-        {[["#10B981", "Available"], ["#F59E0B", "Limited"], ["#EF4444", "Out of Stock"], ["#7C3AED", "Courier"]].map(([color, label]) => (
-          <div key={label} className="flex items-center gap-1.5 mb-1">
-            <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: color }} />
-            <span className="text-[11px] text-muted-foreground">{label}</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 export default function MedicineSearch() {
   const [query, setQuery] = useState("");
   const [searched, setSearched] = useState("");

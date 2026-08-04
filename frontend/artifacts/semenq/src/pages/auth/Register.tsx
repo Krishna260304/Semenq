@@ -65,75 +65,64 @@ export default function Register() {
     password: "",
     businessName: "",
     licenseNumber: "",
+    latitude: null as number | null,
+    longitude: null as number | null,
   });
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [fetchingLocation, setFetchingLocation] = useState(false);
 
   const fetchLiveLocation = () => {
-    setFetchingLocation(true);
-
-    const fallbackToIP = async () => {
-      try {
-        const res = await fetch("https://ipapi.co/json/");
-        const data = await res.json();
-        if (data && !data.error) {
-          setForm(prev => ({
-            ...prev,
-            city: data.city || prev.city,
-            state: data.region || prev.state,
-            pincode: data.postal || prev.pincode
-          }));
-          toast.success("Location estimated from IP address");
-        } else {
-          toast.error("Could not determine location");
-        }
-      } catch (e) {
-        toast.error("Failed to get location");
-      } finally {
-        setFetchingLocation(false);
-      }
-    };
-
-    if (!navigator.geolocation || window.isSecureContext === false) {
-      toast.info("Precise location unavailable, estimating from network...");
-      fallbackToIP();
+    if (!navigator.geolocation) {
+      toast.error("Location is not supported by this browser. Enter the address manually.");
       return;
     }
 
+    setFetchingLocation(true);
     navigator.geolocation.getCurrentPosition(
-      async (position) => {
+      async ({ coords }) => {
         try {
-          const res = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${position.coords.latitude}&lon=${position.coords.longitude}&format=json`);
-          const data = await res.json();
-          if (data && data.address) {
-            const { road, suburb, city, state, postcode, county } = data.address;
-            const addressParts = [road, suburb, county].filter(Boolean);
-            setForm(prev => ({ 
-              ...prev, 
-              address: addressParts.join(", "),
-              city: city || prev.city,
-              state: state || prev.state,
-              pincode: postcode || prev.pincode
-            }));
-            toast.success("Location fetched successfully");
-          } else {
-            toast.error("Could not determine address from location");
+          const response = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?lat=${coords.latitude}&lon=${coords.longitude}&format=json&addressdetails=1`,
+            { headers: { Accept: "application/json" } },
+          );
+          const data = await response.json();
+          const address = data?.address || {};
+          const addressLine = [
+            address.house_number,
+            address.road,
+            address.neighbourhood || address.suburb,
+          ].filter(Boolean).join(", ");
+          const city = address.city || address.town || address.village || address.municipality || "";
+          const state = address.state || "";
+          const pincode = address.postcode || "";
+          if (!addressLine && !city && !state && !pincode) {
+            throw new Error("No address details were returned for this location.");
           }
+          setForm(previous => ({
+            ...previous,
+            address: addressLine || previous.address,
+            city: city || previous.city,
+            state: indianStates.includes(state) ? state : previous.state,
+            pincode: pincode || previous.pincode,
+            latitude: coords.latitude,
+            longitude: coords.longitude,
+          }));
+          toast.success("Location filled into the address form.");
         } catch (error) {
-          toast.error("Failed to fetch address details");
+          toast.error(error instanceof Error ? error.message : "Could not convert your location into an address.");
         } finally {
           setFetchingLocation(false);
         }
       },
       (error) => {
-        console.error("Geolocation error:", error);
-        toast.info("Location access denied, estimating from network...");
-        fallbackToIP();
+        setFetchingLocation(false);
+        toast.error(error.code === error.PERMISSION_DENIED
+          ? "Location permission was denied. Allow it in the browser or enter the address manually."
+          : "Could not read your location. Please try again.");
       },
-      { enableHighAccuracy: true, timeout: 10000 }
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 300000 },
     );
   };
-
   const update = (k: string, v: string) => setForm(prev => ({ ...prev, [k]: v }));
   const refreshCaptcha = () => {
     setCaptcha(createCaptchaChallenge());
@@ -273,6 +262,8 @@ export default function Register() {
             city: form.city,
             state: form.state,
             pincode: form.pincode,
+            latitude: form.latitude ?? undefined,
+            longitude: form.longitude ?? undefined,
             license_number: role === "pharmacy" ? form.licenseNumber : undefined,
           }),
         });
@@ -503,17 +494,19 @@ export default function Register() {
                 <div className="space-y-2">
                   <Label>Full Address</Label>
                   <div className="relative">
-                    <Input placeholder="Full address" value={form.address} onChange={e => update("address", e.target.value)} className="h-11 rounded-[16px] pr-12" />
-                    <button 
-                      type="button" 
-                      onClick={fetchLiveLocation} 
+                    <Input placeholder="Building, street, area" value={form.address} onChange={e => update("address", e.target.value)} className="h-11 rounded-[16px] pr-12" />
+                    <button
+                      type="button"
+                      onClick={fetchLiveLocation}
                       disabled={fetchingLocation}
                       className="absolute right-3 top-1/2 -translate-y-1/2 text-primary hover:text-primary/80 disabled:opacity-50"
-                      title="Fetch live location"
+                      title="Use precise location"
+                      aria-label="Use precise location"
                     >
                       {fetchingLocation ? <Loader2 className="w-5 h-5 animate-spin" /> : <MapPin className="w-5 h-5" />}
                     </button>
                   </div>
+                  <p className="text-xs text-muted-foreground">Click the pin to request precise location and fill the address automatically, or enter it manually.</p>
                   {fieldErrors.address ? <p className="text-destructive text-sm mt-1">{fieldErrors.address}</p> : null}
                 </div>
                 <div className="grid grid-cols-2 gap-4">

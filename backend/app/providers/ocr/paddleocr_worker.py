@@ -70,46 +70,85 @@ def _configure_cache() -> None:
     raise OSError("No writable directory is available for the PaddleOCR model cache.")
 
 
-def _prevent_modelscope_from_loading_torch() -> None:
-    """Avoid PaddleX importing PyTorch through its optional ModelScope client.
+def _install_modelscope_shim() -> None:
+    """Install a tiny ModelScope shim that delegates to Hugging Face.
 
-    PaddleX imports ModelScope at module import time even when Hugging Face is
-    the selected model source.  ModelScope imports PyTorch, which is precisely
-    the DLL collision this worker is designed to avoid.
+    PaddleX may import `modelscope.snapshot_download` even when Hugging Face is
+    configured as the model source. Importing the full ModelScope package pulls
+    in Torch, which can collide with Paddle DLLs in this process. The shim
+    preserves compatibility without importing Torch.
     """
 
-    if "modelscope" in sys.modules or "torch" in sys.modules:
+    if "modelscope" in sys.modules:
         return
+
     modelscope = types.ModuleType("modelscope")
 
-    def unavailable(*args: Any, **kwargs: Any) -> None:
-        raise RuntimeError("ModelScope is disabled; use the configured Hugging Face model source.")
+    def snapshot_download(repo_id: str, *args: Any, **kwargs: Any) -> str:
+        from huggingface_hub import snapshot_download as hf_snapshot_download
 
-    modelscope.snapshot_download = unavailable  # type: ignore[attr-defined]
+        revision = kwargs.get("revision")
+        cache_dir = kwargs.get("cache_dir")
+        local_dir = kwargs.get("local_dir")
+        local_dir_use_symlinks = kwargs.get("local_dir_use_symlinks", False)
+        return hf_snapshot_download(
+            repo_id=repo_id,
+            revision=revision,
+            cache_dir=cache_dir,
+            local_dir=local_dir,
+            local_dir_use_symlinks=local_dir_use_symlinks,
+        )
+
+    modelscope.snapshot_download = snapshot_download  # type: ignore[attr-defined]
     sys.modules["modelscope"] = modelscope
 
 
-def _reader() -> Any:
+def _reader() -> tuple[Any, str, str]:
     _configure_cache()
-    _prevent_modelscope_from_loading_torch()
+    _install_modelscope_shim()
 
     # PaddleOCR writes model/cache messages to stdout. Keep stdout reserved
     # for the JSON protocol used by the parent process.
     with redirect_stdout(sys.stderr):
         import paddle
-        from paddleocr import PaddleOCR
+        from paddleocr import PaddleOCR, PaddleOCRVL
 
-        if not paddle.device.is_compiled_with_cuda():
-            raise RuntimeError("PaddlePaddle was installed without CUDA support.")
-        paddle.device.set_device("gpu:0")
-        return PaddleOCR(
-            lang="en",
-            device="gpu:0",
-            enable_mkldnn=False,
-            use_doc_orientation_classify=False,
-            use_doc_unwarping=False,
-            use_textline_orientation=False,
-        )
+        # VL is more capable than the line OCR pipeline for prescriptions: it
+        # understands document layout before reading the text.  Prefer CUDA but
+        # retain a CPU fallback so an unavailable GPU does not take scanning
+        # down completely.
+        requested_device = os.environ.get("SEMENQ_OCR_DEVICE", "auto").lower()
+        if requested_device == "cuda" and not paddle.device.is_compiled_with_cuda():
+            raise RuntimeError("CUDA was explicitly requested but this Paddle runtime is not CUDA-capable.")
+
+        use_gpu = requested_device != "cpu" and paddle.device.is_compiled_with_cuda()
+        device = "gpu:0" if use_gpu else "cpu"
+        try:
+            paddle.device.set_device(device)
+        except Exception:
+            if requested_device == "cuda":
+                raise RuntimeError("CUDA was explicitly requested but GPU device initialization failed.")
+            # A CUDA-enabled wheel can be installed on a machine without a
+            # usable driver. Fall back to CPU for auto mode.
+            device = "cpu"
+            paddle.device.set_device(device)
+
+        require_vl = os.environ.get("SEMENQ_OCR_REQUIRE_VL", "1").lower() not in {"0", "false", "no", "off"}
+
+        # Primary path: PaddleOCR-VL 1.6 from Hugging Face collection.
+        try:
+            return PaddleOCRVL(pipeline_version="v1.6", device=device), "paddleocr-vl-1.6", device
+        except Exception as exc:
+            if require_vl:
+                raise RuntimeError(f"PaddleOCRVL initialization failed: {exc}") from exc
+            # Some environments miss VL dependencies. Keep OCR within the
+            # Paddle stack by falling back to the classic line OCR pipeline.
+            # Medicine packaging is predominantly Latin-script even in
+            # multilingual markets.  Keep this configurable for deployments
+            # that need a regional OCR model instead of silently using the
+            # library default language.
+            language = os.environ.get("SEMENQ_OCR_LANG", "en")
+            return PaddleOCR(use_angle_cls=True, lang=language, device=device), "paddleocr-classic", device
 
 
 def _parse(reader: Any, image_bytes: bytes) -> dict[str, Any]:
@@ -118,7 +157,10 @@ def _parse(reader: Any, image_bytes: bytes) -> dict[str, Any]:
 
     image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
     try:
-        detections = reader.predict(np.array(image))
+        # Current PaddleOCR pipelines return an iterator; materialize it once
+        # so structured VL pages are handled instead of being treated as a
+        # single opaque generator object.
+        detections = list(reader.predict(np.array(image)))
     except AttributeError:
         # Compatibility with older PaddleOCR releases.
         try:
@@ -159,6 +201,20 @@ def _parse(reader: Any, image_bytes: bytes) -> dict[str, Any]:
     walk(detections)
     pages = detections if isinstance(detections, (list, tuple)) else [detections]
     for page in pages:
+        # Pipeline result objects expose JSON through a method in PaddleOCR 3.x.
+        # Normalize that shape while retaining compatibility with dict results.
+        if not isinstance(page, dict):
+            json_value = getattr(page, "json", None)
+            try:
+                page = json_value() if callable(json_value) else json_value
+                if isinstance(page, str):
+                    page = json.loads(page)
+            except Exception:
+                page = None
+        if not isinstance(page, dict):
+            continue
+        if isinstance(page.get("res"), dict):
+            page = page["res"]
         try:
             texts = page["rec_texts"]
             scores = page["rec_scores"]
@@ -178,6 +234,20 @@ def _parse(reader: Any, image_bytes: bytes) -> dict[str, Any]:
                 continue
             entries.append((min(point[1] for point in bbox), min(point[0] for point in bbox), bbox, str(text).strip(), confidence))
 
+        # PaddleOCR-VL document results expose structured parsing blocks.  Keep
+        # their reading order and use the Markdown/text payload when geometry
+        # is not applicable (for example, a table or a handwritten line).
+        try:
+            blocks = page.get("parsing_res_list", [])
+        except AttributeError:
+            blocks = []
+        for block in blocks:
+            if not isinstance(block, dict):
+                continue
+            text = str(block.get("markdown") or block.get("text") or "").strip()
+            if text:
+                entries.append((len(entries), 0, [], text, 1.0))
+
     entries.sort(key=lambda item: (item[0], item[1]))
     boxes = [
         {"text": text, "confidence": round(confidence, 4), "bbox": points}
@@ -192,13 +262,13 @@ def _parse(reader: Any, image_bytes: bytes) -> dict[str, Any]:
 
 def main() -> None:
     try:
-        reader = _reader()
+        reader, engine_name, device = _reader()
     except Exception as exc:
         sys.stdout.write(json.dumps({"ready": False, "error": f"{type(exc).__name__}: {exc}"}) + "\n")
         sys.stdout.flush()
         return
 
-    sys.stdout.write(json.dumps({"ready": True}) + "\n")
+    sys.stdout.write(json.dumps({"ready": True, "engine": engine_name, "device": device}) + "\n")
     sys.stdout.flush()
     for line in sys.stdin:
         if not line.strip():

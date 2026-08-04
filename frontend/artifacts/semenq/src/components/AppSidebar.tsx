@@ -22,7 +22,7 @@ const patientLinks = [
 const pharmacyLinks = [
   { href: "/pharmacy/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/pharmacy/inventory", label: "Inventory", icon: Package },
-  { href: "/pharmacy/reservations", label: "Reservations", icon: CalendarCheck },
+  { href: "/pharmacy/reservations", label: "Reservations & Rx Review", icon: CalendarCheck },
   { href: "/pharmacy/demand", label: "Demand Forecast", icon: Zap, badge: "AI" },
   { href: "/pharmacy/analytics", label: "Analytics", icon: BarChart3 },
   { href: "/pharmacy/profile", label: "Profile", icon: User },
@@ -33,6 +33,7 @@ const adminLinks = [
   { href: "/admin/users", label: "Users", icon: Users },
   { href: "/admin/pharmacies", label: "Pharmacies", icon: Building2 },
   { href: "/admin/medicines", label: "Medicines", icon: Pill },
+  { href: "/admin/profile", label: "Profile", icon: User },
 ];
 
 export function AppSidebar({ role }: SidebarProps) {

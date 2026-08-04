@@ -7,11 +7,14 @@ import { useState } from "react";
 import { motion } from "framer-motion";
 import { useListPharmacies } from "@workspace/api-client-react";
 import { toast } from "sonner";
+import { auth } from "@/lib/firebase";
+import { useQueryClient } from "@tanstack/react-query";
 
 export default function AdminPharmacies() {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState("all");
   const { data } = useListPharmacies();
+  const queryClient = useQueryClient();
   const list = (Array.isArray(data) ? data : []) as any[];
 
   const filtered = list.filter(p => {
@@ -20,6 +23,23 @@ export default function AdminPharmacies() {
     if (filter === "pending") return match && !p.isVerified;
     return match;
   });
+
+  const review = async (pharmacyId: string, status: "verified" | "rejected") => {
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      const response = await fetch(`/api/pharmacies/${pharmacyId}/verification`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({ status }),
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok || !payload?.success) throw new Error(payload?.message || "Could not update pharmacy.");
+      await queryClient.invalidateQueries();
+      toast.success(status === "verified" ? "Pharmacy approved." : "Pharmacy rejected.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not update pharmacy.");
+    }
+  };
 
   return (
     <AdminLayout>
@@ -72,8 +92,8 @@ export default function AdminPharmacies() {
                   </div>
                   {!ph.isVerified && (
                     <div className="flex gap-2 mt-3">
-                      <Button size="sm" className="h-7 text-xs rounded-[12px] bg-success hover:bg-success/90" onClick={() => toast.success(`${ph.name} verified`)}>Approve</Button>
-                      <Button size="sm" variant="outline" className="h-7 text-xs rounded-[12px] text-destructive border-destructive/30" onClick={() => toast.error("Pharmacy rejected")}>Reject</Button>
+                      <Button size="sm" className="h-7 text-xs rounded-[12px] bg-success hover:bg-success/90" onClick={() => review(ph.id, "verified")}>Approve</Button>
+                      <Button size="sm" variant="outline" className="h-7 text-xs rounded-[12px] text-destructive border-destructive/30" onClick={() => review(ph.id, "rejected")}>Reject</Button>
                     </div>
                   )}
                 </div>

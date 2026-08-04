@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends
 from app.core.middleware.request_id import REQUEST_ID_CTX
 from app.core.responses import APIResponse
 from app.dependencies.auth import get_current_active_user, require_patient, require_pharmacy
-from app.models.reservation import ReservationStatus
+from app.models.reservation import Reservation, ReservationStatus
 from app.models.user import Pharmacy, User
 from app.schemas.reservation import CreateReservationRequest, ReservationResponse
 from app.services.qr_service import QRService
